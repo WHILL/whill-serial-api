@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="WHILL Serial API Tester for Omni Platform - drives both RS232C interfaces from one browser window using the Web Serial API">
+  <meta name="author" content="WHILL CO.,LTD.">
+  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACsSURBVDhP7ZEhCkJBFEUvqIhFLCbBXbgGl+AStIlwLGKwWASz67nJLYgGwSIWg8mmPPjgd5xq+wdueXPfe3dmpIo/gZvCc+GD8E64l1ry4LrwVPgi/CrpKbwR7qYtH/BY+Jw0pnoIr4Q75caF8DFjDt0ytdBdeCs8iAHpYSiSTIRbwkPhfcYTWseAdhE/Hiw2zoRr5dsVSUfCJ+Gr8FK4n1rC1EhLP8QPVXzxBqcrh4mbbEqGAAAAAElFTkSuQmCC">
+  <title>WHILL Serial API Tester — Omni Platform</title>
+  <style>
+    :root {
+      --whill-blue: #0075B8;
+      --whill-blue-dark: #005a8f;
+      --unit-a: #0075B8;
+      --unit-b: #4DBCB6;
+      --text: #444444;
+      --muted: #6b7684;
+      --border: #d9dee5;
+      --surface: #ffffff;
+      --bg: #f5f7f9;
+      --ok: #4DBCB6;
+      --warn: #856404;
+      --bad: #E94816;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-size: 12pt;
+      color: var(--text);
+      background-color: var(--bg);
+      /* WHILL Web UI guideline: Latin = DIN Pro, Japanese = Koburina Gothic (with graceful fallbacks) */
+      font-family: 'DIN Pro', 'DINPro', 'Koburina Gothic W3', 'Koburina Gothic', 'こぶりなゴシック W3', 'こぶりなゴシック', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', 'Meiryo', Arial, sans-serif;
+    }
+
+    button {
+      font-size: 11pt;
+      font-family: inherit;
+      padding: 9px 16px;
+      margin: 0;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      background-color: #e9edf1;
+      color: var(--text);
+    }
+
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.primary { background-color: var(--whill-blue); color: #fff; }
+    button.primary:hover:not(:disabled) { background-color: var(--whill-blue-dark); }
+    button.danger { background-color: var(--bad); color: #fff; }
+    button.danger:hover:not(:disabled) { background-color: #C93D0F; }
+
+    /* ---------- Shell ---------- */
+
+    .app-shell { display: flex; flex-direction: column; min-height: 100vh; }
+
+    .shell-header {
+      background-color: var(--whill-blue);
+      color: #fff;
+      padding: 10px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .shell-header h1 { font-size: 15pt; font-weight: normal; margin: 0; flex-shrink: 0; }
+
+    .conn-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-left: auto; }
+
+    .unit-chip {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background-color: rgba(255, 255, 255, 0.15);
+      border-radius: 5px;
+      padding: 5px 11px;
+      font-size: 10.5pt;
+      white-space: nowrap;
+    }
+
+    .unit-chip .tag { font-weight: bold; }
+    .unit-chip .dot { width: 9px; height: 9px; border-radius: 50%; background-color: #ffffff66; }
+    .unit-chip.live .dot { background-color: var(--ok); }
+    .unit-chip .port { opacity: 0.85; font-size: 10pt; }
+
+    /* ---------- Status strip ---------- */
+
+    .shell-status {
+      background-color: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 22px;
+    }
+
+    .strip-group { display: flex; align-items: center; gap: 8px; }
+
+    .metric { font-size: 10.5pt; white-space: nowrap; }
+    .metric .label { color: var(--muted); margin-right: 5px; }
+    .metric .value { font-weight: bold; }
+    .value.ok { color: var(--ok); }
+    .value.warn { color: var(--warn); }
+    .value.bad { color: var(--bad); }
+    .value.idle { color: var(--muted); }
+
+    /* ---------- Content ---------- */
+
+    .shell-tabs { background-color: var(--surface); border-bottom: 2px solid var(--whill-blue); padding: 0 18px; }
+
+    .tab-button {
+      background-color: var(--whill-blue);
+      color: #fff;
+      border-radius: 5px 5px 0 0;
+      padding: 8px 22px;
+      cursor: default;
+    }
+
+    .shell-content { flex: 1; padding: 18px; }
+
+    .pre-connection-area {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 34px;
+      text-align: center;
+      max-width: 720px;
+      margin: 24px auto;
+    }
+
+    .pre-connection-area h2 { font-size: 15pt; font-weight: normal; color: var(--whill-blue); margin: 0 0 10px; }
+    .pre-connection-area p { font-size: 11pt; margin: 0 0 18px; }
+    .pre-connection-area .buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+    fieldset {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background-color: var(--surface);
+      padding: 16px 20px 20px;
+      margin: 0 0 16px;
+    }
+
+    legend { font-size: 11pt; color: var(--whill-blue); font-weight: bold; padding: 0 6px; }
+
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+    /* ---------- Drive ---------- */
+
+    .drive-grid { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+
+    #joystick {
+      position: relative;
+      width: 190px;
+      height: 190px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #eaf3f9 0%, #d7e6f0 100%);
+      border: 2px solid var(--whill-blue);
+      touch-action: none;
+      flex-shrink: 0;
+    }
+
+    #joystick.disabled { opacity: 0.4; pointer-events: none; }
+
+    #joystick .axis-h, #joystick .axis-v {
+      position: absolute;
+      background-color: #ffffffcc;
+    }
+    #joystick .axis-h { left: 8%; right: 8%; top: 50%; height: 1px; }
+    #joystick .axis-v { top: 8%; bottom: 8%; left: 50%; width: 1px; }
+
+    #knob {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background-color: var(--whill-blue);
+      border: 3px solid #fff;
+      box-shadow: 0 2px 6px #00000033;
+      /* Centred by CSS so the knob is correct before the pad has been laid out */
+      left: 50%;
+      top: 50%;
+      margin-left: -25px;
+      margin-top: -25px;
+      cursor: grab;
+    }
+
+    .drive-readout {
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 10.5pt;
+      background-color: #f0f3f6;
+      border-radius: 5px;
+      padding: 10px 14px;
+      min-width: 260px;
+    }
+
+    .drive-readout div { white-space: pre; }
+    .drive-readout .a { color: var(--unit-a); font-weight: bold; }
+    .drive-readout .b { color: var(--unit-b); font-weight: bold; }
+
+    .slider-block { margin-bottom: 14px; }
+    .slider-block label { display: block; font-size: 10.5pt; color: var(--muted); margin-bottom: 4px; }
+    .slider-block input[type=range] { width: 240px; vertical-align: middle; }
+    .slider-block .num { font-weight: bold; margin-left: 10px; }
+    .slider-block .unit { color: var(--muted); font-size: 10pt; margin-left: 4px; }
+
+    .rotate-buttons { display: flex; gap: 10px; margin-top: 4px; }
+    .rotate-buttons button { font-size: 13pt; padding: 12px 26px; }
+
+    #stop-button {
+      width: 100%;
+      max-width: 480px;
+      font-size: 15pt;
+      font-weight: bold;
+      padding: 16px;
+      letter-spacing: 0.08em;
+      margin-top: 6px;
+    }
+
+    /* ---------- Unit status cards ---------- */
+
+    .unit-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+
+    .unit-card { border: 2px solid var(--border); border-radius: 8px; padding: 0 0 12px; overflow: hidden; }
+    .unit-card.a { border-color: var(--unit-a); }
+    .unit-card.b { border-color: var(--unit-b); }
+
+    .unit-card h3 {
+      font-size: 11pt;
+      margin: 0 0 10px;
+      padding: 7px 14px;
+      color: #fff;
+    }
+    .unit-card.a h3 { background-color: var(--unit-a); }
+    .unit-card.b h3 { background-color: var(--unit-b); }
+
+    .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; padding: 0 14px; font-size: 10.5pt; }
+    .kv .k { color: var(--muted); }
+    .kv .v { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; text-align: right; }
+    .kv .v.mismatch { color: var(--bad); font-weight: bold; }
+
+    /* ---------- Log ---------- */
+
+    .log-toolbar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 10px; }
+    .log-toolbar label { font-size: 10.5pt; display: flex; align-items: center; gap: 5px; }
+    .log-counts { font-size: 10pt; color: var(--muted); margin-left: auto; }
+
+    #data-display {
+      height: 260px;
+      overflow-y: auto;
+      background-color: #f9f9f9;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 10px 12px;
+      margin: 0;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 9.5pt;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    #data-display .l-a { color: var(--unit-a); }
+    #data-display .l-b { color: #3FA79F; }
+    #data-display .l-sys { color: var(--muted); }
+    #data-display .l-err { color: var(--bad); font-weight: bold; }
+  </style>
+</head>
+
+<body>
+  <div class="app-shell">
+
+    <!-- Fixed Header -->
+    <header class="shell-header">
+      <h1>WHILL Serial API Tester — Omni Platform (v1.01)</h1>
+      <div class="conn-controls">
+        <div class="unit-chip" id="chip-a"><span class="dot"></span><span class="tag">Unit A</span><span class="port" id="port-a">not connected</span></div>
+        <div class="unit-chip" id="chip-b"><span class="dot"></span><span class="tag">Unit B</span><span class="port" id="port-b">not connected</span></div>
+        <button id="swap-button" type="button" title="Swap the Unit A / Unit B assignment">⇄ Swap A/B</button>
+        <button id="disconnect-button" type="button">Disconnect</button>
+      </div>
+    </header>
+
+    <!-- Fixed Status Strip: platform-level summary -->
+    <div class="shell-status">
+      <div class="strip-group">
+        <button id="start-sending-button" type="button" title="StartSendingData on both interfaces" disabled="">▶ Start</button>
+        <button id="stop-sending-button" type="button" title="StopSendingData on both interfaces" disabled="">■ Stop</button>
+      </div>
+      <div class="metric"><span class="label">Power</span><span class="value idle" id="m-power">—</span></div>
+      <div class="metric"><span class="label">Battery</span><span class="value idle" id="m-battery">—</span></div>
+      <div class="metric"><span class="label">Error</span><span class="value idle" id="m-error">—</span></div>
+      <div class="metric"><span class="label">Skew</span><span class="value idle" id="m-skew">—</span></div>
+      <div class="metric"><span class="label">Drive</span><span class="value idle" id="m-drive">idle</span></div>
+    </div>
+
+    <!-- Single tab: the speed profile and custom command tabs live in the Model CR2 tester -->
+    <nav class="shell-tabs">
+      <button class="tab-button" type="button">Basic Functions</button>
+    </nav>
+
+    <main class="shell-content">
+
+      <!-- Pre-connection Welcome -->
+      <div id="pre-connection-area" class="pre-connection-area">
+        <h2>Please connect to both drive units</h2>
+        <p>Select the serial port of each drive unit.</p>
+        <div class="buttons">
+          <button id="connect-a-button" type="button" class="primary">Connect Unit A</button>
+          <button id="connect-b-button" type="button" class="primary">Connect Unit B</button>
+          <button id="reconnect-both-button" type="button">Reconnect both</button>
+        </div>
+      </div>
+
+      <div id="main-area" style="display: none;">
+
+        <fieldset>
+          <legend>Power</legend>
+          <div class="row">
+            <button id="power-on-both-button" type="button" class="primary">Power ON — both</button>
+            <button id="power-off-both-button" type="button">Power OFF — both</button>
+            <span style="width: 20px;"></span>
+            <button id="power-on-a-button" type="button">Power ON — A only</button>
+            <button id="power-on-b-button" type="button">Power ON — B only</button>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Drive — SetVelocity (0x08)</legend>
+          <div class="drive-grid">
+            <div>
+              <div id="joystick" class="disabled">
+                <div class="axis-h"></div>
+                <div class="axis-v"></div>
+                <div id="knob"></div>
+              </div>
+            </div>
+
+            <div>
+              <div class="slider-block">
+                <label for="translation-speed">Translation speed</label>
+                <input type="range" id="translation-speed" min="0" max="150" step="10" value="50">
+                <span class="num" id="translation-speed-value">50</span><span class="unit">(platform 0.2 km/h)</span>
+              </div>
+              <div class="slider-block">
+                <label for="rotation-speed">Rotation speed</label>
+                <input type="range" id="rotation-speed" min="0" max="150" step="10" value="50">
+                <span class="num" id="rotation-speed-value">50</span><span class="unit">(X = 50, 0.2 km/h at the wheels)</span>
+              </div>
+              <div class="rotate-buttons">
+                <button id="rotate-ccw-button" type="button" disabled="" title="Hold to rotate counter-clockwise">↺ CCW</button>
+                <button id="rotate-cw-button" type="button" disabled="" title="Hold to rotate clockwise">↻ CW</button>
+              </div>
+            </div>
+
+            <div class="drive-readout" id="drive-readout">
+              <div>platform  Fwd    0   Right    0</div>
+              <div><span class="a">Unit A</span>   Y     0   X        0</div>
+              <div><span class="b">Unit B</span>   Y     0   X        0</div>
+              <div> </div>
+              <div>sent      —</div>
+            </div>
+          </div>
+
+          <button id="stop-button" type="button" class="danger">STOP  (Space)</button>
+        </fieldset>
+
+        <fieldset>
+          <legend>Unit status — data set 1</legend>
+          <div class="unit-cards">
+            <div class="unit-card a">
+              <h3>Unit A</h3>
+              <div class="kv">
+                <span class="k">Power</span><span class="v" id="a-power">—</span>
+                <span class="k">Error</span><span class="v" id="a-error">—</span>
+                <span class="k">Device lock</span><span class="v" id="a-lock">—</span>
+                <span class="k">Battery</span><span class="v" id="a-battery">—</span>
+                <span class="k">Battery current</span><span class="v" id="a-current">—</span>
+                <span class="k">Motor speed R / L</span><span class="v" id="a-speed">—</span>
+                <span class="k">Motor angle R / L</span><span class="v" id="a-angle">—</span>
+                <span class="k">Joystick F / S</span><span class="v" id="a-joy">—</span>
+                <span class="k">Trip distance</span><span class="v" id="a-trip">—</span>
+                <span class="k">Frames / rate</span><span class="v" id="a-rate">—</span>
+              </div>
+            </div>
+            <div class="unit-card b">
+              <h3>Unit B</h3>
+              <div class="kv">
+                <span class="k">Power</span><span class="v" id="b-power">—</span>
+                <span class="k">Error</span><span class="v" id="b-error">—</span>
+                <span class="k">Device lock</span><span class="v" id="b-lock">—</span>
+                <span class="k">Battery</span><span class="v" id="b-battery">—</span>
+                <span class="k">Battery current</span><span class="v" id="b-current">—</span>
+                <span class="k">Motor speed R / L</span><span class="v" id="b-speed">—</span>
+                <span class="k">Motor angle R / L</span><span class="v" id="b-angle">—</span>
+                <span class="k">Joystick F / S</span><span class="v" id="b-joy">—</span>
+                <span class="k">Trip distance</span><span class="v" id="b-trip">—</span>
+                <span class="k">Frames / rate</span><span class="v" id="b-rate">—</span>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Log</legend>
+          <div class="log-toolbar">
+            <label><input type="checkbox" id="filter-a" checked=""> Unit A</label>
+            <label><input type="checkbox" id="filter-b" checked=""> Unit B</label>
+            <label><input type="checkbox" id="filter-send" checked=""> Send</label>
+            <label><input type="checkbox" id="filter-recv" checked=""> Receive</label>
+            <label><input type="checkbox" id="filter-periodic" checked=""> Hide periodic</label>
+            <span class="log-counts" id="log-counts">periodic: 0 sent / 0 received</span>
+          </div>
+          <pre id="data-display"></pre>
+          <div class="row" style="margin-top: 10px;">
+            <button id="clear-log-button" type="button">Clear</button>
+            <button id="download-csv-button" type="button">Download CSV</button>
+          </div>
+        </fieldset>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    'use strict';
+
+    // =====================================================================
+    // Constants
+    // =====================================================================
+
+    // Velocity unit is 0.004 km/h. The Omni Platform accepts -1500 to 1500 on
+    // both axes; the sliders stay well below that because acceleration is
+    // constant and steep (approx. 1.7 m/s2).
+    const VELOCITY_LIMIT = 1500;
+    const VELOCITY_UNIT_KMH = 0.004;
+
+    const SEND_INTERVAL_MS = 100;   // must stay below the 200 ms validity window
+    const STOP_FRAME_REPEAT = 3;    // explicit zero frames on release
+    // SetPower ON is sent in sets of two: if WHILL is asleep the first frame is
+    // consumed as the wake-up trigger and discarded, and it needs at least 100 ms
+    // to resume. Sets repeat for one second, because powering on physically takes
+    // longer than the window in which the power-on response is returned.
+    const POWER_ON_SENDS_PER_SET = 2;
+    const POWER_ON_SEND_INTERVAL_MS = 100;
+    const POWER_ON_WINDOW_MS = 1000;
+    const STALE_AFTER_MS = 1500;
+
+    const SQRT2 = Math.SQRT2;
+
+    // =====================================================================
+    // Unit state
+    // =====================================================================
+
+    function newUnit(key) {
+      return {
+        key: key,               // 'A' | 'B'
+        port: null,
+        portLabel: '',
+        reader: null,
+        keepReading: false,
+        buffer: new Uint8Array(0),
+        powered: false,
+        powerOnSeen: false,     // 0x52 received since the last request
+        ds1: null,              // parsed data set 1
+        ds1At: 0,
+        frameCount: 0,
+        rateWindow: [],
+        lastSentAt: 0
+      };
+    }
+
+    let unitA = newUnit('A');
+    let unitB = newUnit('B');
+
+    const units = () => [unitA, unitB];
+    const bothConnected = () => !!(unitA.port && unitB.port);
+    const bothPowered = () => unitA.powered && unitB.powered;
+
+    // =====================================================================
+    // Elements
+    // =====================================================================
+
+    const el = (id) => document.getElementById(id);
+
+    const preConnectionArea = el('pre-connection-area');
+    const mainArea = el('main-area');
+    const connectAButton = el('connect-a-button');
+    const connectBButton = el('connect-b-button');
+    const reconnectBothButton = el('reconnect-both-button');
+    const swapButton = el('swap-button');
+    const disconnectButton = el('disconnect-button');
+    const startSendingButton = el('start-sending-button');
+    const stopSendingButton = el('stop-sending-button');
+    const powerOnBothButton = el('power-on-both-button');
+    const powerOffBothButton = el('power-off-both-button');
+    const powerOnAButton = el('power-on-a-button');
+    const powerOnBButton = el('power-on-b-button');
+    const joystickEl = el('joystick');
+    const knobEl = el('knob');
+    const translationSpeedInput = el('translation-speed');
+    const rotationSpeedInput = el('rotation-speed');
+    const rotateCcwButton = el('rotate-ccw-button');
+    const rotateCwButton = el('rotate-cw-button');
+    const stopButton = el('stop-button');
+    const driveReadout = el('drive-readout');
+    const dataDisplay = el('data-display');
+    const logCounts = el('log-counts');
+
+    // =====================================================================
+    // Frame helpers
+    // =====================================================================
+
+    // Build a frame: 0xAF, data length, payload, XOR checksum.
+    function buildFrame(payload) {
+      const bytes = [0xAF, payload.length + 1, ...payload];
+      let cs = 0;
+      bytes.forEach((b) => { cs ^= b; });
+      return new Uint8Array([...bytes, cs]);
+    }
+
+    function int16Bytes(value) {
+      const v = value & 0xFFFF;
+      return [(v >> 8) & 0xFF, v & 0xFF];
+    }
+
+    function toSigned16(hi, lo) {
+      return ((hi << 8) | lo) << 16 >> 16;
+    }
+
+    function hexOf(bytes) {
+      return Array.from(bytes).map((b) => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+    }
+
+    const frameSetVelocity = (y, x) => buildFrame([0x08, 0x00, ...int16Bytes(y), ...int16Bytes(x)]);
+    const frameSetPower = (on) => buildFrame([0x02, on ? 0x01 : 0x00]);
+    const frameStartSendingData = (interval) => buildFrame([0x00, 0x01, ...int16Bytes(interval), 0x04]);
+    const frameStopSendingData = () => buildFrame([0x01]);
+
+    // =====================================================================
+    // Log
+    // =====================================================================
+
+    // Every entry is kept so that changing a filter can re-render the view.
+    const LOG_LIMIT = 20000;
+    let logEntries = [];
+    let periodicSent = 0;
+    let periodicRecv = 0;
+
+    function timeParts() {
+      const d = new Date();
+      const p = new Intl.DateTimeFormat('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+      }).formatToParts(d);
+      const get = (t) => p.find((x) => x.type === t).value;
+      return {
+        date: `${get('year')}/${get('month')}/${get('day')}`,
+        time: `${get('hour')}:${get('minute')}:${get('second')}`,
+        ms: String(d.getMilliseconds()).padStart(3, '0'),
+        file: `${get('year')}${get('month')}${get('day')}_${get('hour')}${get('minute')}${get('second')}`
+      };
+    }
+
+    // unitKey: 'A' | 'B' | null (tool-level message)
+    // dir: 'send' | 'recv' | 'sys' | 'err'
+    function log(unitKey, dir, label, bytes, periodic) {
+      const t = timeParts();
+      const entry = {
+        stamp: `${t.date} ${t.time}.${t.ms}`,
+        unit: unitKey,
+        dir: dir,
+        label: label,
+        hex: bytes ? hexOf(bytes) : '',
+        periodic: !!periodic
+      };
+
+      if (entry.periodic) {
+        if (dir === 'send') periodicSent++; else periodicRecv++;
+        updateLogCounts();
+      }
+
+      logEntries.push(entry);
+      if (logEntries.length > LOG_LIMIT) logEntries = logEntries.slice(-LOG_LIMIT);
+
+      if (passesFilter(entry)) appendLogLine(entry);
+    }
+
+    function entryText(e) {
+      const unit = e.unit ? `[${e.unit}]` : '[--]';
+      return `[${e.stamp}]${unit} ${e.label}${e.hex ? ': ' + e.hex : ''}\n`;
+    }
+
+    function entryClass(e) {
+      if (e.dir === 'err') return 'l-err';
+      if (e.unit === 'A') return 'l-a';
+      if (e.unit === 'B') return 'l-b';
+      return 'l-sys';
+    }
+
+    function appendLogLine(e) {
+      const atBottom = dataDisplay.scrollHeight - dataDisplay.scrollTop - dataDisplay.clientHeight < 30;
+      const span = document.createElement('span');
+      span.className = entryClass(e);
+      span.textContent = entryText(e);
+      dataDisplay.appendChild(span);
+      if (atBottom) dataDisplay.scrollTop = dataDisplay.scrollHeight;
+    }
+
+    function passesFilter(e) {
+      if (e.dir === 'err') return true;              // problems are never hidden
+      if (e.periodic && el('filter-periodic').checked) return false;
+      if (e.unit === 'A' && !el('filter-a').checked) return false;
+      if (e.unit === 'B' && !el('filter-b').checked) return false;
+      if (e.dir === 'send' && !el('filter-send').checked) return false;
+      if (e.dir === 'recv' && !el('filter-recv').checked) return false;
+      return true;
+    }
+
+    function renderLog() {
+      dataDisplay.textContent = '';
+      const frag = document.createDocumentFragment();
+      logEntries.filter(passesFilter).forEach((e) => {
+        const span = document.createElement('span');
+        span.className = entryClass(e);
+        span.textContent = entryText(e);
+        frag.appendChild(span);
+      });
+      dataDisplay.appendChild(frag);
+      dataDisplay.scrollTop = dataDisplay.scrollHeight;
+    }
+
+    function updateLogCounts() {
+      logCounts.textContent = `periodic: ${periodicSent} sent / ${periodicRecv} received`;
+    }
+
+    ['filter-a', 'filter-b', 'filter-send', 'filter-recv', 'filter-periodic']
+      .forEach((id) => el(id).addEventListener('change', renderLog));
+
+    el('clear-log-button').addEventListener('click', () => {
+      logEntries = [];
+      periodicSent = 0;
+      periodicRecv = 0;
+      updateLogCounts();
+      dataDisplay.textContent = '';
+    });
+
+    el('download-csv-button').addEventListener('click', () => {
+      if (!logEntries.length) {
+        alert('No log data to download.');
+        return;
+      }
+      const rows = ['Timestamp,Unit,Direction,Type,Data'];
+      logEntries.forEach((e) => {
+        rows.push([e.stamp, e.unit || '', e.dir, `"${e.label.replace(/"/g, '""')}"`, e.hex].join(','));
+      });
+      const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `whill_omni_log_${timeParts().file}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    // =====================================================================
+    // Serial write / read
+    // =====================================================================
+
+    async function writeTo(unit, frame, label, periodic) {
+      if (!unit.port || !unit.port.writable) return false;
+      try {
+        const writer = unit.port.writable.getWriter();
+        await writer.write(frame);
+        writer.releaseLock();
+        unit.lastSentAt = performance.now();
+        log(unit.key, 'send', label, frame, periodic);
+        return true;
+      } catch (error) {
+        log(unit.key, 'err', `Send failed (${label}): ${error.message}`, null, false);
+        onInterfaceFailure(unit);
+        return false;
+      }
+    }
+
+    async function readLoop(unit) {
+      while (unit.port && unit.port.readable && unit.keepReading) {
+        unit.reader = unit.port.readable.getReader();
+        try {
+          while (true) {
+            const { value, done } = await unit.reader.read();
+            if (done) break;
+            if (value) consume(unit, value);
+          }
+        } catch (error) {
+          if (unit.keepReading) {
+            log(unit.key, 'err', `Receive failed: ${error.message}`, null, false);
+            onInterfaceFailure(unit);
+          }
+        } finally {
+          try { unit.reader.releaseLock(); } catch (e) { /* already released */ }
+          unit.reader = null;
+        }
+      }
+    }
+
+    // Accumulate bytes and pull out complete, checksum-valid frames.
+    function consume(unit, chunk) {
+      const merged = new Uint8Array(unit.buffer.length + chunk.length);
+      merged.set(unit.buffer);
+      merged.set(chunk, unit.buffer.length);
+      unit.buffer = merged;
+
+      let offset = 0;
+      while (unit.buffer.length - offset >= 2) {
+        if (unit.buffer[offset] !== 0xAF) { offset++; continue; }
+
+        const dataLength = unit.buffer[offset + 1];
+        const total = dataLength + 2;
+        if (dataLength < 2 || total > 64) { offset++; continue; }
+        if (unit.buffer.length - offset < total) break;
+
+        const frame = unit.buffer.subarray(offset, offset + total);
+        let cs = 0;
+        for (let i = 0; i < total - 1; i++) cs ^= frame[i];
+
+        if (cs !== frame[total - 1]) {
+          log(unit.key, 'err', 'Checksum mismatch, frame discarded', frame, false);
+          offset++;
+          continue;
+        }
+
+        dispatch(unit, frame.slice(2, total - 1), frame);
+        offset += total;
+      }
+
+      unit.buffer = unit.buffer.slice(offset);
+    }
+
+    function dispatch(unit, payload, frame) {
+      const kind = payload[0];
+
+      if (kind === 0x01 && payload.length === 30) {
+        parseDataSet1(unit, payload.subarray(1));
+        log(unit.key, 'recv', 'Data set 1', frame, true);
+        return;
+      }
+      if (kind === 0x52) {
+        unit.powerOnSeen = true;
+        unit.powered = true;
+        log(unit.key, 'recv', 'Power-on response', frame, false);
+        updateUI();
+        return;
+      }
+      if (kind === 0x00) {
+        log(unit.key, 'recv', 'Data set 0', frame, true);
+        return;
+      }
+      log(unit.key, 'recv', `Frame 0x${kind.toString(16).toUpperCase().padStart(2, '0')}`, frame, false);
+    }
+
+    function parseDataSet1(unit, info) {
+      unit.ds1 = {
+        deviceLock: info[2],
+        joystickPause: info[3],
+        tripDistance: ((info[8] << 24) | (info[9] << 16) | (info[10] << 8) | info[11]) >>> 0,
+        joyFront: info[12] << 24 >> 24,
+        joySide: info[13] << 24 >> 24,
+        battery: info[14],
+        current: toSigned16(info[15], info[16]) * 2,
+        angleRight: toSigned16(info[17], info[18]),
+        angleLeft: toSigned16(info[19], info[20]),
+        speedRight: toSigned16(info[21], info[22]),
+        speedLeft: toSigned16(info[23], info[24]),
+        power: info[25],
+        error: info[27]
+      };
+      unit.ds1At = performance.now();
+      unit.powered = true;
+      unit.frameCount++;
+      unit.rateWindow.push(unit.ds1At);
+      while (unit.rateWindow.length && unit.ds1At - unit.rateWindow[0] > 1000) unit.rateWindow.shift();
+      renderStatus();
+    }
+
+    // =====================================================================
+    // Connect / disconnect / swap
+    // =====================================================================
+
+    function describePort(port) {
+      const info = port.getInfo ? port.getInfo() : {};
+      if (info.usbVendorId != null) {
+        const vid = info.usbVendorId.toString(16).toUpperCase().padStart(4, '0');
+        const pid = (info.usbProductId || 0).toString(16).toUpperCase().padStart(4, '0');
+        return `USB ${vid}:${pid}`;
+      }
+      return 'serial port';
+    }
+
+    async function openPort(port) {
+      // The Serial API specifies 8-N-2. Fall back to the default stop bits if a
+      // driver refuses the request, rather than leaving the user unable to connect.
+      try {
+        await port.open({ baudRate: 38400, dataBits: 8, parity: 'none', stopBits: 2 });
+      } catch (error) {
+        await port.open({ baudRate: 38400 });
+        log(null, 'sys', `Opened with default stop bits — the driver refused 2 stop bits (${error.message})`, null, false);
+      }
+    }
+
+    async function attach(unit, port) {
+      unit.port = port;
+      unit.portLabel = describePort(port);
+      unit.keepReading = true;
+      unit.buffer = new Uint8Array(0);
+      readLoop(unit);
+      log(unit.key, 'sys', `Connected — ${unit.portLabel}`, null, false);
+      updateUI();
+    }
+
+    async function connectUnit(unit) {
+      try {
+        const port = await navigator.serial.requestPort({});
+        await openPort(port);
+        await attach(unit, port);
+      } catch (error) {
+        if (error && error.name === 'NotFoundError') return;   // user cancelled the picker
+        log(unit.key, 'err', `Connect failed: ${error.message}`, null, false);
+      }
+    }
+
+    connectAButton.addEventListener('click', () => connectUnit(unitA));
+    connectBButton.addEventListener('click', () => connectUnit(unitB));
+
+    // Ports already authorised in an earlier session need no user gesture.
+    reconnectBothButton.addEventListener('click', async () => {
+      try {
+        const ports = await navigator.serial.getPorts();
+        const free = ports.filter((p) => p !== unitA.port && p !== unitB.port);
+        if (!unitA.port && free.length) { await openPort(free[0]); await attach(unitA, free.shift()); }
+        if (!unitB.port && free.length) { await openPort(free[0]); await attach(unitB, free.shift()); }
+        if (!bothConnected()) {
+          log(null, 'sys', 'Fewer than two previously authorised ports were found — connect them individually.', null, false);
+        }
+      } catch (error) {
+        log(null, 'err', `Reconnect failed: ${error.message}`, null, false);
+      }
+    });
+
+    async function releaseUnit(unit) {
+      unit.keepReading = false;
+      if (unit.reader) { try { await unit.reader.cancel(); } catch (e) { /* ignore */ } }
+      if (unit.port) { try { await unit.port.close(); } catch (e) { /* ignore */ } }
+      const key = unit.key;
+      if (key === 'A') unitA = newUnit('A'); else unitB = newUnit('B');
+    }
+
+    disconnectButton.addEventListener('click', async () => {
+      stopDrive('disconnect');
+      await Promise.all([releaseUnit(unitA), releaseUnit(unitB)]);
+      log(null, 'sys', 'Disconnected both interfaces', null, false);
+      renderStatus();
+      updateUI();
+    });
+
+    // Swapping only exchanges the A/B assignment — no port is reopened. Motion is
+    // stopped first because the platform's axes change the instant it happens.
+    swapButton.addEventListener('click', () => {
+      stopDrive('swap');
+      const a = unitA;
+      const b = unitB;
+      a.key = 'B';
+      b.key = 'A';
+      unitA = b;
+      unitB = a;
+      log(null, 'sys', `Swapped — Unit A is now ${unitA.portLabel || 'unassigned'}, Unit B is now ${unitB.portLabel || 'unassigned'}`, null, false);
+      renderStatus();
+      updateUI();
+    });
+
+    function onInterfaceFailure(unit) {
+      // Spec: a loss on either interface is a stop condition for the whole platform.
+      if (driveMode) {
+        log(null, 'err', `Unit ${unit.key} failed — stopping the platform`, null, false);
+      }
+      stopDrive('interface failure');
+    }
+
+    // =====================================================================
+    // Power
+    // =====================================================================
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    async function powerOn(unit) {
+      unit.powerOnSeen = false;
+      const deadline = performance.now() + POWER_ON_WINDOW_MS;
+      let sets = 0;
+
+      while (performance.now() < deadline && !unit.powerOnSeen) {
+        sets++;
+        for (let i = 1; i <= POWER_ON_SENDS_PER_SET; i++) {
+          const ok = await writeTo(unit, frameSetPower(true),
+                                   `SetPower ON (set ${sets}, ${i}/${POWER_ON_SENDS_PER_SET})`, false);
+          if (!ok) return false;
+          // The interval also serves as the window for the power-on response.
+          await sleep(POWER_ON_SEND_INTERVAL_MS);
+          if (unit.powerOnSeen) break;
+        }
+      }
+
+      if (unit.powerOnSeen) {
+        log(unit.key, 'sys', `Power on confirmed after ${sets} set(s)`, null, false);
+        return true;
+      }
+      log(unit.key, 'err', `No power-on response within ${POWER_ON_WINDOW_MS} ms — press Power ON again`, null, false);
+      return false;
+    }
+
+    async function powerOff(unit) {
+      await writeTo(unit, frameSetPower(false), 'SetPower OFF', false);
+      unit.powered = false;
+      unit.powerOnSeen = false;
+    }
+
+    powerOnBothButton.addEventListener('click', async () => {
+      setPowerButtonsBusy(true);
+      await Promise.all([powerOn(unitA), powerOn(unitB)]);
+      setPowerButtonsBusy(false);
+      updateUI();
+    });
+
+    powerOffBothButton.addEventListener('click', async () => {
+      stopDrive('power off');
+      setPowerButtonsBusy(true);
+      await Promise.all([powerOff(unitA), powerOff(unitB)]);
+      setPowerButtonsBusy(false);
+      log(null, 'sys', 'Wait more than 5 s before powering on again.', null, false);
+      renderStatus();
+      updateUI();
+    });
+
+    powerOnAButton.addEventListener('click', async () => {
+      setPowerButtonsBusy(true);
+      await powerOn(unitA);
+      setPowerButtonsBusy(false);
+      updateUI();
+    });
+
+    powerOnBButton.addEventListener('click', async () => {
+      setPowerButtonsBusy(true);
+      await powerOn(unitB);
+      setPowerButtonsBusy(false);
+      updateUI();
+    });
+
+    function setPowerButtonsBusy(busy) {
+      [powerOnBothButton, powerOffBothButton, powerOnAButton, powerOnBButton]
+        .forEach((b) => { b.disabled = busy; });
+    }
+
+    // =====================================================================
+    // State data streaming
+    // =====================================================================
+
+    startSendingButton.addEventListener('click', async () => {
+      await Promise.all([
+        writeTo(unitA, frameStartSendingData(100), 'StartSendingData (data set 1, 100 ms)', false),
+        writeTo(unitB, frameStartSendingData(100), 'StartSendingData (data set 1, 100 ms)', false)
+      ]);
+    });
+
+    stopSendingButton.addEventListener('click', async () => {
+      await Promise.all([
+        writeTo(unitA, frameStopSendingData(), 'StopSendingData', false),
+        writeTo(unitB, frameStopSendingData(), 'StopSendingData', false)
+      ]);
+    });
+
+    // =====================================================================
+    // Drive
+    // =====================================================================
+
+    let driveMode = null;            // null | 'translate' | 'rotate'
+    let driveInterval = null;
+    let joystickVector = { x: 0, y: 0 };   // -1 .. 1, magnitude clamped to 1
+    let rotationDirection = 0;             // -1 CCW, +1 CW
+    let lastSkewMs = null;
+
+    const translationSpeed = () => Number(translationSpeedInput.value);
+    const rotationSpeed = () => Number(rotationSpeedInput.value);
+
+    function kmh(raw) { return (Math.abs(raw) * VELOCITY_UNIT_KMH).toFixed(1); }
+
+    function syncSliderLabels() {
+      el('translation-speed-value').textContent = translationSpeedInput.value;
+      el('rotation-speed-value').textContent = rotationSpeedInput.value;
+      // Translation: the slider is the platform's speed, and because the two unit
+      // axes sit at 45 degrees no unit is ever sent more than this value either.
+      translationSpeedInput.nextElementSibling.nextElementSibling.textContent =
+        `(platform ${kmh(translationSpeed())} km/h)`;
+      // Rotation: the slider is the X value sent to both units, i.e. the wheel
+      // speed difference that turns the platform.
+      rotationSpeedInput.nextElementSibling.nextElementSibling.textContent =
+        `(X = ${rotationSpeed()}, ${kmh(rotationSpeed())} km/h at the wheels)`;
+    }
+
+    translationSpeedInput.addEventListener('input', syncSliderLabels);
+    rotationSpeedInput.addEventListener('input', syncSliderLabels);
+
+    // Each unit's Y axis sits at 45 degrees to the platform's forward direction,
+    // and the two axes are orthogonal, so the platform velocity resolves as:
+    //   Y_A = (forward + right) / sqrt(2)
+    //   Y_B = (forward - right) / sqrt(2)
+    // Rotation is the same X on both units.
+    function solveVelocities() {
+      let forward = 0;
+      let right = 0;
+      let x = 0;
+
+      if (driveMode === 'translate') {
+        forward = joystickVector.y * translationSpeed();
+        right = joystickVector.x * translationSpeed();
+      } else if (driveMode === 'rotate') {
+        x = rotationDirection * rotationSpeed();
+      }
+
+      let yA = (forward + right) / SQRT2;
+      let yB = (forward - right) / SQRT2;
+
+      // Guard: scale proportionally rather than clipping per axis, so that the
+      // commanded direction survives. With the current slider caps this never
+      // fires, but it protects the direction if the caps are ever raised.
+      const peak = Math.max(Math.abs(yA), Math.abs(yB), Math.abs(x));
+      let scale = 1;
+      if (peak > VELOCITY_LIMIT) {
+        scale = VELOCITY_LIMIT / peak;
+        yA *= scale;
+        yB *= scale;
+        x *= scale;
+        log(null, 'err', `Command exceeded ±${VELOCITY_LIMIT} — scaled by ${scale.toFixed(2)} to keep the direction`, null, false);
+      }
+
+      return {
+        forward: Math.round(forward),
+        right: Math.round(right),
+        yA: Math.round(yA),
+        yB: Math.round(yB),
+        x: Math.round(x)
+      };
+    }
+
+    async function sendDriveFrames(v, periodic) {
+      let doneA = 0;
+      let doneB = 0;
+      await Promise.all([
+        writeTo(unitA, frameSetVelocity(v.yA, v.x), `SetVelocity Y=${v.yA} X=${v.x}`, periodic)
+          .then(() => { doneA = performance.now(); }),
+        writeTo(unitB, frameSetVelocity(v.yB, v.x), `SetVelocity Y=${v.yB} X=${v.x}`, periodic)
+          .then(() => { doneB = performance.now(); })
+      ]);
+      lastSkewMs = Math.abs(doneA - doneB);
+      renderDriveReadout(v);
+      renderStatus();
+    }
+
+    function startDrive(mode) {
+      if (!canDrive() || driveMode === mode) return;
+      driveMode = mode;
+      updateDriveLockout();
+      log(null, 'sys', `Drive started — ${mode}`, null, false);
+
+      sendDriveFrames(solveVelocities(), true);
+      driveInterval = setInterval(() => {
+        if (!driveMode) return;
+        sendDriveFrames(solveVelocities(), true);
+      }, SEND_INTERVAL_MS);
+      renderStatus();
+    }
+
+    async function stopDrive(reason) {
+      if (driveInterval) { clearInterval(driveInterval); driveInterval = null; }
+      const wasDriving = driveMode !== null;
+      driveMode = null;
+      rotationDirection = 0;
+      joystickVector = { x: 0, y: 0 };
+      resetKnob();
+      updateDriveLockout();
+
+      if (wasDriving) {
+        // Command a stop explicitly instead of waiting for the 200 ms expiry.
+        const zero = { forward: 0, right: 0, yA: 0, yB: 0, x: 0 };
+        for (let i = 0; i < STOP_FRAME_REPEAT; i++) {
+          await sendDriveFrames(zero, false);
+        }
+        log(null, 'sys', `Drive stopped — ${reason}`, null, false);
+      }
+      renderStatus();
+      renderDriveReadout({ forward: 0, right: 0, yA: 0, yB: 0, x: 0 });
+    }
+
+    function canDrive() { return bothConnected() && bothPowered(); }
+
+    // Translation and rotation are exclusive.
+    function updateDriveLockout() {
+      const drivable = canDrive();
+      joystickEl.classList.toggle('disabled', !drivable || driveMode === 'rotate');
+      const rotateBlocked = !drivable || driveMode === 'translate';
+      rotateCcwButton.disabled = rotateBlocked;
+      rotateCwButton.disabled = rotateBlocked;
+      swapButton.disabled = !bothConnected() || driveMode !== null;
+    }
+
+    function renderDriveReadout(v) {
+      const pad = (n) => String(n).padStart(5, ' ');
+      driveReadout.innerHTML =
+        `<div>platform  Fwd ${pad(v.forward)}   Right ${pad(v.right)}</div>` +
+        `<div><span class="a">Unit A</span>   Y   ${pad(v.yA)}   X     ${pad(v.x)}</div>` +
+        `<div><span class="b">Unit B</span>   Y   ${pad(v.yB)}   X     ${pad(v.x)}</div>` +
+        `<div> </div>` +
+        `<div>sent      ${driveMode ? `every ${SEND_INTERVAL_MS} ms` : '—'}</div>`;
+    }
+
+    // ---------- Joystick ----------
+
+    function knobRange() { return (joystickEl.clientWidth - knobEl.offsetWidth) / 2; }
+
+    function resetKnob() {
+      knobEl.style.transform = 'translate(0px, 0px)';
+    }
+
+    function applyPointer(event) {
+      const rect = joystickEl.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const range = knobRange();
+
+      let dx = (event.clientX - cx) / range;
+      let dy = (cy - event.clientY) / range;    // screen y is inverted
+
+      // Circular clamp: the commanded speed is the same in every direction.
+      const magnitude = Math.hypot(dx, dy);
+      if (magnitude > 1) { dx /= magnitude; dy /= magnitude; }
+
+      joystickVector = { x: dx, y: dy };
+      knobEl.style.transform = `translate(${dx * range}px, ${-dy * range}px)`;
+    }
+
+    // The drag starts on the knob, never on the pad, so that a stray click near
+    // the rim cannot command near-full deflection in a single step.
+    knobEl.addEventListener('pointerdown', (event) => {
+      if (!canDrive() || driveMode === 'rotate') return;
+      event.preventDefault();
+      knobEl.setPointerCapture(event.pointerId);
+      startDrive('translate');
+    });
+
+    knobEl.addEventListener('pointermove', (event) => {
+      if (driveMode !== 'translate') return;
+      applyPointer(event);
+    });
+
+    const releaseJoystick = () => { if (driveMode === 'translate') stopDrive('joystick released'); };
+    knobEl.addEventListener('pointerup', releaseJoystick);
+    knobEl.addEventListener('pointercancel', releaseJoystick);
+
+    // ---------- Rotation buttons: hold to rotate ----------
+
+    function bindRotate(button, direction) {
+      button.addEventListener('pointerdown', () => {
+        if (!canDrive() || driveMode === 'translate') return;
+        rotationDirection = direction;
+        startDrive('rotate');
+      });
+      const release = () => { if (driveMode === 'rotate') stopDrive('rotation released'); };
+      button.addEventListener('pointerup', release);
+      button.addEventListener('pointercancel', release);
+      button.addEventListener('pointerleave', release);
+    }
+
+    bindRotate(rotateCcwButton, -1);
+    bindRotate(rotateCwButton, 1);
+
+    // ---------- Stop ----------
+
+    stopButton.addEventListener('click', () => stopDrive('STOP pressed'));
+
+    window.addEventListener('keydown', (event) => {
+      if (event.code === 'Space') {
+        event.preventDefault();
+        stopDrive('Space pressed');
+      }
+    });
+
+    window.addEventListener('blur', () => stopDrive('window lost focus'));
+
+    // =====================================================================
+    // Status rendering
+    // =====================================================================
+
+    function fmtLock(v) { return v === 1 ? 'locked' : 'unlocked'; }
+
+    function renderUnitCard(unit, prefix, mismatch) {
+      const stale = unit.ds1 && performance.now() - unit.ds1At > STALE_AFTER_MS;
+      const d = unit.ds1;
+      const set = (id, text, bad) => {
+        const node = el(prefix + id);
+        node.textContent = text;
+        node.classList.toggle('mismatch', !!bad);
+      };
+
+      if (!d) {
+        ['power', 'error', 'lock', 'battery', 'current', 'speed', 'angle', 'joy', 'trip', 'rate']
+          .forEach((id) => set(id, '—', false));
+        return;
+      }
+
+      set('power', d.power === 1 ? 'ON' : 'OFF', mismatch.power);
+      set('error', d.error === 0 ? 'none' : `0x${d.error.toString(16).toUpperCase()}`, d.error !== 0 || mismatch.error);
+      set('lock', fmtLock(d.deviceLock), mismatch.lock);
+      set('battery', `${d.battery} %`, false);
+      set('current', `${d.current} mA`, false);
+      set('speed', `${(d.speedRight * VELOCITY_UNIT_KMH).toFixed(2)} / ${(d.speedLeft * VELOCITY_UNIT_KMH).toFixed(2)} km/h`, false);
+      set('angle', `${(d.angleRight / 1000).toFixed(3)} / ${(d.angleLeft / 1000).toFixed(3)} rad`, false);
+      set('joy', `${d.joyFront} / ${d.joySide}`, false);
+      set('trip', `${d.tripDistance} m`, false);
+      set('rate', stale ? `${unit.frameCount} — stale` : `${unit.frameCount} / ${unit.rateWindow.length} Hz`, stale);
+    }
+
+    function renderStatus() {
+      const a = unitA.ds1;
+      const b = unitB.ds1;
+      const mismatch = {
+        power: !!(a && b) && a.power !== b.power,
+        error: !!(a && b) && (a.error !== 0) !== (b.error !== 0),
+        lock: !!(a && b) && a.deviceLock !== b.deviceLock
+      };
+
+      renderUnitCard(unitA, 'a-', mismatch);
+      renderUnitCard(unitB, 'b-', mismatch);
+
+      // Platform-level summary: aggregate the way the specification says to read it.
+      const setMetric = (id, text, cls) => {
+        const node = el(id);
+        node.textContent = text;
+        node.className = 'value ' + cls;
+      };
+
+      if (!bothConnected()) {
+        setMetric('m-power', 'not connected', 'idle');
+      } else if (unitA.powered && unitB.powered) {
+        setMetric('m-power', 'ON (A + B)', 'ok');
+      } else if (unitA.powered || unitB.powered) {
+        setMetric('m-power', unitA.powered ? 'A only' : 'B only', 'bad');
+      } else {
+        setMetric('m-power', 'OFF', 'idle');
+      }
+
+      if (a && b) {
+        const low = Math.min(a.battery, b.battery);
+        setMetric('m-battery', `${low} % (A ${a.battery} / B ${b.battery})`, low <= 20 ? 'bad' : 'ok');
+        const worst = Math.max(a.error, b.error);
+        setMetric('m-error', worst === 0 ? 'none' : `A 0x${a.error.toString(16).toUpperCase()} / B 0x${b.error.toString(16).toUpperCase()}`, worst === 0 ? 'ok' : 'bad');
+      } else {
+        setMetric('m-battery', '—', 'idle');
+        setMetric('m-error', '—', 'idle');
+      }
+
+      setMetric('m-skew', lastSkewMs === null ? '—' : `${lastSkewMs.toFixed(1)} ms`, lastSkewMs !== null && lastSkewMs > 20 ? 'warn' : 'idle');
+      setMetric('m-drive', driveMode ? driveMode : 'idle', driveMode ? 'ok' : 'idle');
+    }
+
+    // =====================================================================
+    // UI enable / disable
+    // =====================================================================
+
+    function updateUI() {
+      const anyConnected = !!(unitA.port || unitB.port);
+      // Both interfaces are needed, so stay on the connect panel until both are open.
+      preConnectionArea.style.display = bothConnected() ? 'none' : 'block';
+      mainArea.style.display = bothConnected() ? 'block' : 'none';
+
+      connectAButton.disabled = !!unitA.port;
+      connectAButton.textContent = unitA.port ? 'Unit A connected' : 'Connect Unit A';
+      connectBButton.disabled = !!unitB.port;
+      connectBButton.textContent = unitB.port ? 'Unit B connected' : 'Connect Unit B';
+      disconnectButton.disabled = !anyConnected;
+
+      startSendingButton.disabled = !bothConnected();
+      stopSendingButton.disabled = !bothConnected();
+
+      powerOnBothButton.disabled = !bothConnected();
+      powerOffBothButton.disabled = !bothConnected();
+      powerOnAButton.disabled = !unitA.port;
+      powerOnBButton.disabled = !unitB.port;
+
+      [['chip-a', unitA, 'port-a'], ['chip-b', unitB, 'port-b']].forEach(([chipId, unit, portId]) => {
+        el(chipId).classList.toggle('live', !!unit.port);
+        el(portId).textContent = unit.port ? unit.portLabel : 'not connected';
+      });
+
+      updateDriveLockout();
+    }
+
+    // =====================================================================
+    // Init
+    // =====================================================================
+
+    if (!('serial' in navigator)) {
+      preConnectionArea.innerHTML =
+        '<h2>This browser does not support the Web Serial API</h2>' +
+        '<p>Use Google Chrome or Microsoft Edge.</p>';
+    }
+
+    navigator.serial && navigator.serial.addEventListener('disconnect', (event) => {
+      units().forEach((unit) => {
+        if (unit.port === event.target) {
+          log(unit.key, 'err', 'Port disconnected', null, false);
+          onInterfaceFailure(unit);
+          unit.keepReading = false;
+          unit.port = null;
+          unit.powered = false;
+          unit.ds1 = null;
+          renderStatus();
+          updateUI();
+        }
+      });
+    });
+
+    // Data may stop arriving without an error; refresh so "stale" shows up.
+    setInterval(renderStatus, 500);
+
+    resetKnob();
+    syncSliderLabels();
+    updateLogCounts();
+    renderStatus();
+    updateUI();
+    renderDriveReadout({ forward: 0, right: 0, yA: 0, yB: 0, x: 0 });
+  </script>
+</body></html>

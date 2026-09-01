@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="WHILL Serial API for the Omni Platform - specification and browser-based tester for the holonomic four-wheel platform">
+  <meta name="author" content="WHILL CO.,LTD.">
+  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACsSURBVDhP7ZEhCkJBFEUvqIhFLCbBXbgGl+AStIlwLGKwWASz67nJLYgGwSIWg8mmPPjgd5xq+wdueXPfe3dmpIo/gZvCc+GD8E64l1ry4LrwVPgi/CrpKbwR7qYtH/BY+Jw0pnoIr4Q75caF8DFjDt0ytdBdeCs8iAHpYSiSTIRbwkPhfcYTWseAdhE/Hiw2zoRr5dsVSUfCJ+Gr8FK4n1rC1EhLP8QPVXzxBqcrh4mbbEqGAAAAAElFTkSuQmCC">
+  <title>WHILL Serial API — Omni Platform</title>
+  <style>
+    :root {
+      --whill-blue: #0075B8;
+      --whill-blue-dark: #005a8f;
+      --text: #444444;
+      --muted: #6b7684;
+      --border: #d9dee5;
+      --surface: #ffffff;
+      --bg: #f5f7f9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background-color: var(--bg);
+      color: var(--text);
+      font-size: 12pt;
+      line-height: 1.7;
+      /* WHILL Web UI guideline: Latin = DIN Pro, Japanese = Koburina Gothic (with graceful fallbacks) */
+      font-family: 'DIN Pro', 'DINPro', 'Koburina Gothic W3', 'Koburina Gothic', 'こぶりなゴシック W3', 'こぶりなゴシック', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', 'Meiryo', Arial, sans-serif;
+    }
+
+    .wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 20px 60px;
+    }
+
+    header.site {
+      background-color: var(--surface);
+      border-bottom: 3px solid var(--whill-blue);
+      padding: 28px 0;
+      margin-bottom: 36px;
+    }
+
+    header.site .wrap { padding-bottom: 0; }
+
+    header.site img { display: block; margin-bottom: 14px; }
+
+    .crumb {
+      font-size: 10.5pt;
+      color: var(--muted);
+      margin: 0 0 6px;
+    }
+
+    .crumb a { color: var(--whill-blue); text-decoration: none; }
+    .crumb a:hover { text-decoration: underline; }
+
+    h1 {
+      font-size: 24pt;
+      font-weight: normal;
+      color: var(--whill-blue);
+      margin: 0 0 8px;
+    }
+
+    .tagline { margin: 0; color: var(--muted); }
+
+    h2 {
+      font-size: 14pt;
+      font-weight: normal;
+      color: var(--whill-blue);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+      margin: 44px 0 18px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card.pending { background-color: #fafbfc; }
+
+    .card h3 {
+      font-size: 13pt;
+      font-weight: bold;
+      color: var(--whill-blue);
+      margin: 0 0 10px;
+    }
+
+    .card.pending h3 { color: var(--muted); }
+
+    .card p {
+      margin: 0 0 18px;
+      font-size: 11pt;
+      flex: 1;
+    }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+    a.button {
+      display: inline-block;
+      background-color: var(--whill-blue);
+      color: #ffffff;
+      text-decoration: none;
+      font-size: 11pt;
+      padding: 9px 18px;
+      border-radius: 5px;
+    }
+
+    a.button:hover { background-color: var(--whill-blue-dark); }
+
+    a.secondary {
+      color: var(--whill-blue);
+      text-decoration: none;
+      font-size: 10.5pt;
+      border-bottom: 1px solid var(--border);
+    }
+
+    a.secondary:hover { border-bottom-color: var(--whill-blue); }
+
+    .status {
+      display: inline-block;
+      font-size: 10pt;
+      color: var(--muted);
+      background-color: #eef0f3;
+      border-radius: 4px;
+      padding: 6px 12px;
+    }
+
+    .notes {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--whill-blue);
+      border-radius: 4px;
+      padding: 18px 22px;
+    }
+
+    .notes p.scope {
+      margin: 0 0 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px dashed var(--border);
+      font-size: 11pt;
+      color: var(--muted);
+    }
+
+    .notes ul { margin: 0; padding-left: 20px; }
+    .notes li { font-size: 11pt; margin-bottom: 8px; }
+    .notes li:last-child { margin-bottom: 0; }
+
+    table.env {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: var(--surface);
+      font-size: 11pt;
+    }
+
+    table.env th, table.env td {
+      border: 1px solid var(--border);
+      padding: 9px 14px;
+      text-align: left;
+    }
+
+    table.env th {
+      width: 220px;
+      font-weight: normal;
+      color: var(--muted);
+      background-color: #fafbfc;
+    }
+
+    code {
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 10.5pt;
+      background-color: #eef0f3;
+      border-radius: 3px;
+      padding: 1px 5px;
+    }
+
+    footer.site {
+      margin-top: 50px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 10pt;
+    }
+
+    footer.site a { color: var(--muted); }
+  </style>
+</head>
+
+<body>
+  <header class="site">
+    <div class="wrap">
+      <img src="../images/whill_logo.svg" alt="WHILL" width="90">
+      <p class="crumb"><a href="../">WHILL Serial API</a> &rsaquo; Omni Platform</p>
+      <h1>Omni Platform</h1>
+      <p class="tagline">Holonomic four-wheel platform &mdash; two Model CR2 drive units at 90&deg;</p>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <p>
+      The Omni Platform is holonomic: it moves in any direction &mdash; forward, backward, left, right
+      and diagonally &mdash; and rotates, all without changing the direction the wheels point. Each of its
+      two drive units has its own RS232C interface, and the host drives both in sync.
+    </p>
+
+    <h2>Documentation &amp; Tools</h2>
+    <div class="cards">
+
+      <div class="card">
+        <h3>Specification</h3>
+        <p>What differs from the Model CR2: the two interfaces, the motion model, the command set and the extended <code>SetVelocity</code> range.</p>
+        <div class="actions">
+          <a class="button" href="spec/">Read online</a>
+          <a class="secondary" href="https://github.com/WHILL/whill-serial-api/blob/main/docs/omni/spec/WHILL_Serial_API_Specification_Omni.md">Markdown source on GitHub</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Tester <span class="badge">v1.01</span></h3>
+        <p>Drives both interfaces from one browser window, so the platform can be moved and observed without writing code.</p>
+        <div class="actions">
+          <a class="button" href="tester/">Open in browser</a>
+          <a class="secondary" href="tester/index.html" download="WHILL_Serial_API_Tester_Omni_v1.01.html">Download</a>
+        </div>
+      </div>
+
+    </div>
+
+    <h2>Before you read the specification</h2>
+    <div class="notes">
+      <p class="scope">
+        These notes apply to the <strong>Specification</strong>.
+      </p>
+      <ul>
+        <li><strong>The Omni specification is a companion document.</strong> Frame format, power states, state data and timing are defined in the <a href="../cr2/spec/">Model CR2 specification</a> and are not repeated. Read that one first.</li>
+        <li><strong>Every command addresses one drive unit.</strong> A command sent to a single interface configures or moves half the platform.</li>
+        <li><strong>Both interfaces must be driven in sync.</strong> The platform's motion is the sum of the two units' contributions, so motion commands go out to both within the same control cycle.</li>
+      </ul>
+    </div>
+
+    <h2>Before you use the tester</h2>
+    <div class="notes">
+      <p class="scope">
+        These notes apply to the <strong>Tester</strong> only.
+        The specification is an ordinary web page &mdash; read it in any browser, no setup needed.
+      </p>
+      <ul>
+        <li><strong>Chrome or Edge is required.</strong> The tester uses the Web Serial API, which Safari and Firefox do not support.</li>
+        <li><strong>Your data stays on your machine.</strong> The tester communicates only between your browser and the WHILL over the serial ports. Nothing is sent to any server.</li>
+        <li><strong>It works offline.</strong> The tester is a single self-contained HTML file &mdash; download it and open it from a local disk on an isolated network.</li>
+      </ul>
+    </div>
+
+    <h2>Connection</h2>
+    <table class="env">
+      <tr><th>Applies to</th><td>Omni Platform (4WD)</td></tr>
+      <tr><th>Transport</th><td>RS232C, 38400 bps, 8-N-2 &mdash; two independent interfaces</td></tr>
+      <tr><th>Connector</th><td>D-sub 9-pin, one per drive unit</td></tr>
+      <tr><th>Serial API version</th><td>1.1</td></tr>
+      <tr><th>Motion command</th><td><code>SetVelocity</code> (<code>0x08</code>), &minus;1500 &hellip; 1500 on both axes</td></tr>
+    </table>
+
+    <p style="font-size: 11pt; color: var(--muted);">
+      Using a Model CR2, Wheeled Robot Base or Electrical System Kit? See the
+      <a href="../cr2/" style="color: var(--whill-blue);">Model CR2 page</a>.
+    </p>
+
+    <footer class="site">
+      <p>
+        &copy; WHILL, Inc. &mdash; Released under the MIT License.
+        Source and issue tracker on <a href="https://github.com/WHILL/whill-serial-api">GitHub</a>.
+      </p>
+    </footer>
+  </div>
+</body></html>

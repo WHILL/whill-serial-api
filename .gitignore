@@ -1,0 +1,17 @@
+# Internal material — must not be published in this public repository
+internal/
+*.xlsx
+*.xlsm
+log/
+*.csv
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+*.swp
+*~
+
+# Node (only if a build step is ever added)
+node_modules/

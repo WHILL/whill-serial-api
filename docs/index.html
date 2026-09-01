@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="WHILL Serial API - specification and browser-based tools for the serial (RS232C) interface of WHILL products">
+  <meta name="author" content="WHILL CO.,LTD.">
+  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACsSURBVDhP7ZEhCkJBFEUvqIhFLCbBXbgGl+AStIlwLGKwWASz67nJLYgGwSIWg8mmPPjgd5xq+wdueXPfe3dmpIo/gZvCc+GD8E64l1ry4LrwVPgi/CrpKbwR7qYtH/BY+Jw0pnoIr4Q75caF8DFjDt0ytdBdeCs8iAHpYSiSTIRbwkPhfcYTWseAdhE/Hiw2zoRr5dsVSUfCJ+Gr8FK4n1rC1EhLP8QPVXzxBqcrh4mbbEqGAAAAAElFTkSuQmCC">
+  <title>WHILL Serial API</title>
+  <style>
+    :root {
+      --whill-blue: #0075B8;
+      --whill-blue-dark: #005a8f;
+      --text: #444444;
+      --muted: #6b7684;
+      --border: #d9dee5;
+      --surface: #ffffff;
+      --bg: #f5f7f9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background-color: var(--bg);
+      color: var(--text);
+      font-size: 12pt;
+      line-height: 1.7;
+      /* WHILL Web UI guideline: Latin = DIN Pro, Japanese = Koburina Gothic (with graceful fallbacks) */
+      font-family: 'DIN Pro', 'DINPro', 'Koburina Gothic W3', 'Koburina Gothic', 'こぶりなゴシック W3', 'こぶりなゴシック', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', 'Meiryo', Arial, sans-serif;
+    }
+
+    .wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 20px 60px;
+    }
+
+    header.site {
+      background-color: var(--surface);
+      border-bottom: 3px solid var(--whill-blue);
+      padding: 32px 0 28px;
+      margin-bottom: 36px;
+    }
+
+    header.site .wrap { padding-bottom: 0; }
+
+    header.site img { display: block; margin-bottom: 14px; }
+
+    h1 {
+      font-size: 26pt;
+      font-weight: normal;
+      color: var(--whill-blue);
+      margin: 0 0 8px;
+    }
+
+    .tagline { margin: 0; color: var(--muted); }
+
+    h2 {
+      font-size: 14pt;
+      font-weight: normal;
+      color: var(--whill-blue);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+      margin: 44px 0 18px;
+    }
+
+    .products {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    .product {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .product.pending { background-color: #fafbfc; }
+
+    .product h3 {
+      font-size: 15pt;
+      font-weight: bold;
+      margin: 0 0 4px;
+    }
+
+    .product h3 a { color: var(--whill-blue); text-decoration: none; }
+    .product h3 a:hover { text-decoration: underline; }
+    .product.pending h3 { color: var(--muted); }
+
+    .product .covers {
+      margin: 0 0 16px;
+      font-size: 10.5pt;
+      color: var(--muted);
+    }
+
+    .product p.about {
+      margin: 0 0 20px;
+      font-size: 11pt;
+      flex: 1;
+    }
+
+    .links { display: flex; flex-wrap: wrap; gap: 10px; }
+
+    a.button {
+      display: inline-block;
+      background-color: var(--whill-blue);
+      color: #ffffff;
+      text-decoration: none;
+      font-size: 11pt;
+      padding: 8px 16px;
+      border-radius: 5px;
+    }
+
+    a.button:hover { background-color: var(--whill-blue-dark); }
+
+    a.button.ghost {
+      background-color: transparent;
+      color: var(--whill-blue);
+      border: 1px solid var(--whill-blue);
+      padding: 7px 15px;
+    }
+
+    a.button.ghost:hover { background-color: #eef6fb; }
+
+    .status {
+      display: inline-block;
+      font-size: 10pt;
+      color: var(--muted);
+      background-color: #eef0f3;
+      border-radius: 4px;
+      padding: 6px 12px;
+    }
+
+    .notes {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--whill-blue);
+      border-radius: 4px;
+      padding: 18px 22px;
+    }
+
+    .notes p.scope {
+      margin: 0 0 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px dashed var(--border);
+      font-size: 11pt;
+      color: var(--muted);
+    }
+
+    .notes ul { margin: 0; padding-left: 20px; }
+    .notes li { font-size: 11pt; margin-bottom: 8px; }
+    .notes li:last-child { margin-bottom: 0; }
+
+    footer.site {
+      margin-top: 50px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 10pt;
+    }
+
+    footer.site a { color: var(--muted); }
+  </style>
+</head>
+
+<body>
+  <header class="site">
+    <div class="wrap">
+      <img src="images/whill_logo.svg" alt="WHILL" width="90">
+      <h1>WHILL Serial API</h1>
+      <p class="tagline">Serial (RS232C) command and data interface of WHILL products.</p>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <p>
+      Control a WHILL from your own host device over RS232C. Each product below has its own
+      specification and browser-based tools &mdash; the tools talk to the WHILL directly from
+      your browser over the Web Serial API, with no installation and no driver.
+    </p>
+
+    <h2>Select your product</h2>
+    <div class="products">
+
+      <div class="product">
+        <h3><a href="cr2/">Model CR2</a></h3>
+        <p class="covers">Model CR2 &middot; Wheeled Robot Base &middot; Electrical System Kit</p>
+        <p class="about">
+          Two-wheel drive with a single RS232C interface. Full command set, including
+          speed profiles, device lock and capability queries.
+        </p>
+        <div class="links">
+          <a class="button" href="cr2/spec/">Specification</a>
+          <a class="button ghost" href="cr2/tester/">Tester</a>
+          <a class="button ghost" href="cr2/emulator/">Emulator</a>
+        </div>
+      </div>
+
+      <div class="product">
+        <h3><a href="omni/">Omni Platform</a></h3>
+        <p class="covers">Omni Platform (4WD)</p>
+        <p class="about">
+          Two Model CR2 drive units mounted at 90&deg; to each other, making the platform
+          holonomic &mdash; it moves in any direction without changing the direction the wheels
+          point. Controlled through two RS232C interfaces driven in sync, with a reduced
+          command set.
+        </p>
+        <div class="links">
+          <a class="button" href="omni/spec/">Specification</a>
+          <a class="button ghost" href="omni/tester/">Tester</a>
+        </div>
+      </div>
+
+    </div>
+
+    <h2>Before you use the tools</h2>
+    <div class="notes">
+      <p class="scope">
+        These notes apply to the <strong>Tester</strong> and <strong>Emulator</strong> only.
+        The specifications are ordinary web pages &mdash; read them in any browser, no setup needed.
+      </p>
+      <ul>
+        <li><strong>Chrome or Edge is required.</strong> The tools use the Web Serial API, which Safari and Firefox do not support.</li>
+        <li><strong>Your data stays on your machine.</strong> The tools communicate only between your browser and the WHILL over the serial port. Nothing is sent to any server.</li>
+        <li><strong>They work offline.</strong> Each tool is a single self-contained HTML file &mdash; download it and open it from a local disk on an isolated network.</li>
+      </ul>
+    </div>
+
+    <footer class="site">
+      <p>
+        &copy; WHILL, Inc. &mdash; Released under the MIT License.
+        Source and issue tracker on <a href="https://github.com/WHILL/whill-serial-api">GitHub</a>.
+      </p>
+    </footer>
+  </div>
+</body></html>

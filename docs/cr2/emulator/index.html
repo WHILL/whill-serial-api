@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="WHILL Serial API Emulator - Emulates a WHILL device: parses host commands and holds/serves internal data (Dataset0/1) using the Web Serial API">
+  <meta name="author" content="WHILL CO.,LTD.">
+  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACsSURBVDhP7ZEhCkJBFEUvqIhFLCbBXbgGl+AStIlwLGKwWASz67nJLYgGwSIWg8mmPPjgd5xq+wdueXPfe3dmpIo/gZvCc+GD8E64l1ry4LrwVPgi/CrpKbwR7qYtH/BY+Jw0pnoIr4Q75caF8DFjDt0ytdBdeCs8iAHpYSiSTIRbwkPhfcYTWseAdhE/Hiw2zoRr5dsVSUfCJ+Gr8FK4n1rC1EhLP8QPVXzxBqcrh4mbbEqGAAAAAElFTkSuQmCC">
+  <title>WHILL Serial API Emulator</title>
+  <style>
+    h1 {
+      font-size: 20pt;
+      background-color: #0075B8;
+      color: #FFFFFF;
+      font-weight: normal;
+      padding: 10px;
+    }
+
+    h2 {
+      font-size: 14pt;
+    }
+
+    body {
+      font-size: 12pt;
+      color: #444444;
+      /* WHILL Web UI guideline: Latin = DIN Pro, Japanese = Koburina Gothic (with graceful fallbacks) */
+      font-family: 'DIN Pro', 'DINPro', 'Koburina Gothic W3', 'Koburina Gothic', 'こぶりなゴシック W3', 'こぶりなゴシック', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', 'Meiryo', Arial, sans-serif;
+    }
+
+    fieldset {
+      font-size: 12pt;
+      line-height: 1.5em;
+      padding: 20px;
+      margin: 10px 0;
+    }
+
+    button {
+      font-size: 12pt;
+      padding: 10px 20px;
+      margin: 5px;
+      border-radius: 5px;
+      border: none;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Tab Function Styles */
+    .tab-buttons {
+      display: flex;
+      border-bottom: 2px solid #0075B8;
+      margin-bottom: 20px;
+    }
+
+    .tab-button {
+      background-color: #f8f9fa;
+      color: #0075B8;
+      border: 2px solid #0075B8;
+      border-bottom: none;
+      padding: 12px 24px;
+      margin-right: 5px;
+      border-radius: 8px 8px 0 0;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.3s ease;
+    }
+
+    .tab-button:hover {
+      background-color: #e3f2fd;
+    }
+
+    .tab-button.active {
+      background-color: #0075B8;
+      color: white;
+    }
+
+    .tab-content {
+      display: none;
+      margin-top: 20px;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Power Button Styles */
+    .power-button {
+      font-weight: bold;
+      font-size: 14pt;
+      padding: 15px 30px;
+      margin: 10px;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+    }
+
+    .power-on {
+      background-color: #0075B8;
+      color: white;
+      box-shadow: 0 4px 8px rgba(0, 117, 184, 0.3);
+    }
+
+    .power-off {
+      background-color: #666666;
+      color: white;
+      box-shadow: 0 4px 8px rgba(102, 102, 102, 0.3);
+    }
+
+    /* Connection Button Styles */
+    .connect-button {
+      background-color: #0075B8;
+      color: white;
+      box-shadow: 0 4px 8px rgba(0, 117, 184, 0.3);
+    }
+
+    .connect-button:hover:not(:disabled) {
+      background-color: #005a8f;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(0, 117, 184, 0.4);
+    }
+
+    /* Clear Button Styles */
+    .clear-button {
+      background-color: #666666;
+      color: white;
+      box-shadow: 0 4px 8px rgba(102, 102, 102, 0.3);
+    }
+
+    .clear-button:hover:not(:disabled) {
+      background-color: #4d4d4d;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(102, 102, 102, 0.4);
+    }
+
+    /* Download CSV Button Styles */
+    .download-csv-button {
+      background-color: #4DBCB6;
+      color: white;
+      box-shadow: 0 4px 8px rgba(77, 188, 182, 0.3);
+    }
+
+    .download-csv-button:hover:not(:disabled) {
+      background-color: #3FA79F;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(77, 188, 182, 0.4);
+    }
+
+    #data-display {
+      width: 100%;
+      height: 300px;
+      border: 1px solid #ccc;
+      padding: 10px;
+      overflow-y: auto;
+      background-color: #f9f9f9;
+      font-family: monospace;
+      font-size: 8pt;
+      white-space: pre-wrap;
+      border-radius: 5px;
+    }
+
+    /* Primary action button (blue) - shared with custom command buttons */
+    .custom-command-button {
+      background-color: #0075B8;
+      color: white;
+      box-shadow: 0 4px 8px rgba(0, 117, 184, 0.3);
+      padding: 12px 20px;
+      font-size: 12pt;
+      font-weight: bold;
+    }
+
+    .custom-command-button:hover:not(:disabled) {
+      background-color: #005a8f;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(0, 117, 184, 0.4);
+    }
+
+    /* Teal "send/serve" button */
+    .serve-button {
+      background-color: #4DBCB6;
+      color: white;
+      box-shadow: 0 2px 4px rgba(77, 188, 182, 0.3);
+      padding: 8px 14px;
+      font-size: 11pt;
+      font-weight: bold;
+    }
+
+    .serve-button:hover:not(:disabled) {
+      background-color: #3FA79F;
+      transform: translateY(-1px);
+      box-shadow: 0 3px 6px rgba(77, 188, 182, 0.4);
+    }
+
+    /* Stop button (orange) */
+    .stop-button {
+      background-color: #E94816;
+      color: white;
+      box-shadow: 0 2px 4px rgba(233, 72, 22, 0.3);
+      padding: 8px 14px;
+      font-size: 11pt;
+      font-weight: bold;
+    }
+
+    .stop-button:hover:not(:disabled) {
+      background-color: #C93D0F;
+      transform: translateY(-1px);
+      box-shadow: 0 3px 6px rgba(233, 72, 22, 0.4);
+    }
+
+    /* Pre-connection Display Area Styles */
+    .pre-connection-area {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 400px;
+      background-color: #f8f9fa;
+      border-radius: 10px;
+      margin: 20px 0;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .connection-welcome {
+      text-align: center;
+      padding: 40px;
+      background-color: white;
+      border-radius: 15px;
+      box-shadow: 0 6px 20px rgba(0, 117, 184, 0.15);
+      border: 2px solid #0075B8;
+    }
+
+    .connection-welcome h2 {
+      color: #0075B8;
+      margin-bottom: 20px;
+      font-size: 24pt;
+      font-weight: bold;
+    }
+
+    .connection-welcome p {
+      color: #666666;
+      margin-bottom: 30px;
+      font-size: 14pt;
+      line-height: 1.6;
+    }
+
+    .connection-welcome .connect-button {
+      font-size: 16pt;
+      padding: 20px 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #0075B8, #005a8f);
+      box-shadow: 0 8px 25px rgba(0, 117, 184, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .connection-welcome .connect-button:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 35px rgba(0, 117, 184, 0.4);
+      background: linear-gradient(135deg, #005a8f, #004a7a);
+    }
+
+    /* Disconnect Button Styles */
+    .disconnect-button {
+      background-color: #E94816;
+      color: white;
+      border: none;
+      padding: 0 16px;
+      border-radius: 5px;
+      font-size: 12pt;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(233, 72, 22, 0.3);
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+      line-height: 1;
+    }
+
+    .disconnect-button:hover {
+      background-color: #C93D0F;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(233, 72, 22, 0.4);
+    }
+
+    /* Device Information Display Area (FW version box) */
+    .device-info-display {
+      background-color: rgba(255, 255, 255, 0.95);
+      border-radius: 5px;
+      padding: 4px 10px;
+      font-size: 9pt;
+      color: #0075B8;
+      font-weight: bold;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      height: 50px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      box-sizing: border-box;
+    }
+
+    .device-info-display .version-label { font-size: 8pt; opacity: 0.8; }
+    .device-info-display .version-value { font-size: 11pt; opacity: 1; }
+
+    /* ===== Dashboard App-Shell Layout (fixed status + fixed log) ===== */
+    html, body { height: 100%; }
+    body { margin: 0; }
+    .app-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      grid-template-rows: auto auto 1fr auto;
+      grid-template-areas:
+        "header  header"
+        "tabs    status"
+        "content status"
+        "log     log";
+      height: 100vh;
+      overflow: hidden;
+    }
+    /* Before connecting: collapse to a single column so the welcome fills the width */
+    .app-shell:not(.connected) {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr;
+      grid-template-areas: "header" "content";
+    }
+    /* Title bar and connection controls share one row (controls overlaid on the blue bar) */
+    .shell-header {
+      grid-area: header; background: #0075B8;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .shell-header h1 { margin: 0; flex: 1; background: transparent; white-space: nowrap; }
+    .conn-controls {
+      display: flex; align-items: center; justify-content: flex-end;
+      gap: 12px; padding: 6px 16px; flex-wrap: wrap; flex: 0 0 auto;
+    }
+    /* Fixed status panel on the right side */
+    .shell-status {
+      grid-area: status; background: #fff; padding: 8px 10px;
+      border-left: 1px solid #dee2e6; box-shadow: -2px 0 4px rgba(0,0,0,0.06);
+      overflow-y: auto;
+    }
+    .status-strip-inner { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+    .shell-status #live-status-container { flex-direction: column; gap: 6px; }
+    .shell-status #live-status-container > div { flex: 0 0 auto !important; }
+    .shell-status #live-status-container > div[style*="grid"] { gap: 6px !important; }
+    .status-strip-inner > .strip-actions {
+      display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px; margin: 0; flex: 0 0 auto;
+    }
+    .status-strip-inner > .strip-actions button { margin: 0; padding: 7px 6px; font-size: 9.5pt; flex: 1 1 46%; }
+    .motor-status-card { padding: 6px 8px !important; min-width: 0 !important; }
+    .motor-status-header { margin-bottom: 3px !important; font-size: 10pt !important; }
+    .motor-status-item { margin-bottom: 1px !important; }
+    .motor-status-label,
+    .motor-status-value { font-size: 8.5pt !important; }
+    .shell-tabs { grid-area: tabs; background: #fff; padding: 8px 12px 0; }
+    .shell-tabs .tab-buttons { margin: 0; }
+    .shell-content { grid-area: content; overflow-y: auto; padding: 8px 12px 16px; }
+    .shell-log {
+      grid-area: log; background: #fff; padding: 6px 12px;
+      border-top: 2px solid #0075B8; box-shadow: 0 -2px 6px rgba(0,0,0,0.08);
+    }
+    .log-bar { display: flex; align-items: stretch; gap: 12px; }
+    .shell-log #data-display { flex: 1; height: 5.5em; margin: 0; }
+    .log-actions { display: flex; flex-direction: column; justify-content: center; gap: 6px; flex: 0 0 auto; }
+    .log-actions button { margin: 0; padding: 6px 16px; font-size: 10pt; }
+
+    /* Connection-state visibility */
+    .app-shell:not(.connected) .shell-status,
+    .app-shell:not(.connected) .shell-tabs,
+    .app-shell:not(.connected) .shell-log,
+    .app-shell:not(.connected) .conn-controls,
+    .app-shell:not(.connected) .tab-content { display: none; }
+    .app-shell.connected #pre-connection-area { display: none; }
+
+    /* ===== Lightweight section heading ===== */
+    .panel { margin: 10px 0 16px; }
+    .panel-title {
+      font-weight: bold; color: #0075B8; font-size: 12pt;
+      margin: 0 0 8px; padding-bottom: 4px; border-bottom: 2px solid #e3eef7;
+    }
+
+    /* ===== Speed Profile / Dataset table ===== */
+    .sp-controls { display: flex; align-items: center; gap: 12px; margin: 8px 0 12px; flex-wrap: wrap; }
+    .sp-status { padding: 0; font-weight: bold; color: #666666; }
+    .sp-status.ok { color: #4DBCB6; }
+    .sp-table { border-collapse: collapse; margin: 6px 0; }
+    .sp-table th, .sp-table td { border: 1px solid #cfe0ee; padding: 5px 6px; text-align: center; }
+    .sp-table thead th { background: #0075B8; color: #fff; font-weight: bold; font-size: 11pt; }
+    .sp-table tbody th { background: #eef4fb; color: #0075B8; font-weight: bold; font-size: 11pt; white-space: nowrap; }
+    .sp-table td.grp-start, .sp-table th.grp-start { border-left: 2px solid #0075B8; }
+    .sp-table .sp-input { width: 54px; margin: 0; border: 1px solid #cfd8e3; font-size: 11pt; padding: 4px 4px; text-align: center; font-family: monospace; border-radius: 3px; }
+    .sp-table .sp-input:focus { outline: none; border-color: #0075B8; box-shadow: 0 0 5px rgba(0,117,184,0.3); }
+
+    /* ===== Dataset1 editable field grid ===== */
+    .ds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; align-items: start; }
+    .ds-card { border: 1px solid #cfe0ee; border-radius: 8px; padding: 8px 12px; background: #fafcff; }
+    .ds-card-title { font-weight: bold; color: #0075B8; font-size: 11pt; margin-bottom: 6px; }
+    .ds-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+    .ds-row label { flex: 1; font-weight: bold; color: #0075B8; font-size: 9.5pt; }
+    .ds-input { width: 90px; padding: 3px 5px; border: 1px solid #0075B8; border-radius: 4px; font-size: 9.5pt; font-family: monospace; text-align: right; }
+    .ds-input:focus { outline: none; border-color: #005a8f; box-shadow: 0 0 5px rgba(0,117,184,0.3); }
+    .ds-hint { color: #999; font-size: 8pt; width: 74px; flex: 0 0 auto; }
+
+    /* ===== Command Monitor ===== */
+    .monitor-latest {
+      background: #f8f9fa; border: 2px solid #0075B8; border-radius: 10px; padding: 14px;
+      margin-bottom: 14px;
+    }
+    .monitor-latest .ml-name { font-size: 16pt; font-weight: bold; color: #0075B8; }
+    .monitor-latest .ml-hex { font-family: monospace; font-size: 10pt; color: #000; margin: 6px 0; word-break: break-all; }
+    .monitor-latest .ml-fields { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+    .monitor-latest .ml-field { font-size: 10pt; }
+    .monitor-latest .ml-field b { color: #4DBCB6; }
+    .cmd-count-table { border-collapse: collapse; width: 100%; }
+    .cmd-count-table th, .cmd-count-table td { border: 1px solid #cfe0ee; padding: 5px 8px; text-align: left; font-size: 9.5pt; }
+    .cmd-count-table thead th { background: #0075B8; color: #fff; }
+    .cmd-count-table td.count { text-align: right; font-family: monospace; font-weight: bold; }
+    .cmd-count-table tr.hit td { background: #e6f6f5; }
+    .cmd-count-table td.params { font-family: monospace; color: #333; }
+
+    /* Capability checkbox grids */
+    .cap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; }
+    .cap-grid label { display: flex; align-items: center; gap: 6px; font-size: 9.5pt; color: #000; }
+    .settings-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+    .settings-row label { font-weight: bold; color: #0075B8; font-size: 10.5pt; }
+    .settings-row input[type="number"] { width: 70px; padding: 3px 5px; border: 1px solid #0075B8; border-radius: 4px; font-size: 10pt; font-family: monospace; text-align: right; }
+  </style>
+</head>
+
+<body>
+  <div class="app-shell" id="app-shell">
+    <!-- Fixed Header -->
+    <header class="shell-header">
+      <h1><span>WHILL Serial API Emulator (v1.01)</span></h1>
+      <div class="conn-controls">
+        <div id="device-info-display" class="device-info-display">
+          <div class="version-label">Reporting FW:</div>
+          <div class="version-value" id="header-fw-version">89.01</div>
+        </div>
+        <button id="disconnect-button" type="button" class="disconnect-button">Disconnect</button>
+      </div>
+    </header>
+
+    <!-- Fixed Status Strip: live internal Dataset1 view + serve controls -->
+    <div class="shell-status">
+      <div class="status-strip-inner">
+        <div class="strip-actions">
+          <button id="stream-ds1-button" type="button" class="serve-button" title="Manually start streaming Dataset1">▶ Stream DS1</button>
+          <button id="send-ds1-button" type="button" class="serve-button" title="Send one Dataset1 frame now">Send DS1</button>
+          <button id="stop-stream-button" type="button" class="stop-button" title="Stop streaming">■ Stop</button>
+          <button id="send-ds0-button" type="button" class="serve-button" title="Send one Dataset0 (speed profile) frame now">Send DS0</button>
+        </div>
+        <div id="stream-indicator" style="font-size: 9pt; font-weight: bold; color: #666666; padding: 2px 2px;">Streaming: idle</div>
+
+        <div id="live-status-container" style="display: flex; gap: 8px; align-items: stretch;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1; align-content: start;">
+            <!-- Battery -->
+            <div class="motor-status-card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #0075B8; border-radius: 8px; padding: 8px;">
+              <div class="motor-status-header" style="font-weight: bold; color: #0075B8; text-align: center;">🔋 Battery</div>
+              <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">Level:</span><span id="live-battery-level" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+              <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">Current:</span><span id="live-battery-current" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+            </div>
+            <!-- System -->
+            <div class="motor-status-card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #0075B8; border-radius: 8px; padding: 8px;">
+              <div class="motor-status-header" style="font-weight: bold; color: #0075B8; text-align: center;">⚙️ System</div>
+              <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">Power:</span><span id="live-power-status" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+              <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">Error:</span><span id="live-error-code" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+              <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">Counter:</span><span id="live-angle-counter" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+              <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">Trip:</span><span id="live-trip-distance" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+            </div>
+            <!-- Angle -->
+            <div class="motor-status-card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #0075B8; border-radius: 8px; padding: 8px;">
+              <div class="motor-status-header" style="font-weight: bold; color: #0075B8; text-align: center;">🔄 Angle</div>
+              <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">Right:</span><span id="live-motor-angle-right" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+              <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">Left:</span><span id="live-motor-angle-left" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+            </div>
+            <!-- Speed -->
+            <div class="motor-status-card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #0075B8; border-radius: 8px; padding: 8px;">
+              <div class="motor-status-header" style="font-weight: bold; color: #0075B8; text-align: center;">⚡ Speed</div>
+              <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">Right:</span><span id="live-motor-speed-right" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+              <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">Left:</span><span id="live-motor-speed-left" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+            </div>
+          </div>
+          <!-- Joystick -->
+          <div class="motor-status-card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #0075B8; border-radius: 8px; padding: 8px; flex: 0 0 185px;">
+            <div class="motor-status-header" style="font-weight: bold; color: #0075B8; text-align: center;">🎮 Joystick</div>
+            <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">F/B:</span><span id="live-joystick-forward" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+            <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">L/R:</span><span id="live-joystick-turn" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+            <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">Pause:</span><span id="live-joystick-pause" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+            <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">Max Speed Level:</span><span id="live-max-speed-level" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+            <!-- Speed Level (Selected): ユーザー選択値。Max Speed Levelでは頭打ちにならない。 -->
+            <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">Speed Level (Selected):</span><span id="live-speed-level" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+            <!-- Speed Level (Effective): MCが実際に適用中の値(speed_mode_indicator)。制限中はSelectedと乖離する。 -->
+            <div class="motor-status-item" style="display: flex; justify-content: space-between;"><span class="motor-status-label" style="font-weight: bold; color: #0075B8;">Speed Level (Effective):</span><span id="live-speed-mode" class="motor-status-value" style="color: #000; font-weight: bold;">-</span></div>
+            
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fixed Tab Bar -->
+    <nav class="shell-tabs">
+      <div class="tab-buttons">
+        <button class="tab-button active" onclick="switchTab('monitor')">Command Monitor</button>
+        <button class="tab-button" onclick="switchTab('dataset1')">Dataset1 (Status)</button>
+        <button class="tab-button" onclick="switchTab('dataset0')">Dataset0 (Speed Profile)</button>
+        <button class="tab-button" onclick="switchTab('device')">Device / Capability</button>
+      </div>
+    </nav>
+
+    <!-- Scrollable Content -->
+    <main class="shell-content">
+      <!-- Pre-connection Welcome -->
+      <div id="pre-connection-area" class="pre-connection-area">
+        <div class="connection-welcome">
+          <h2>Emulate a WHILL device</h2>
+          <p>Connect a serial port to start acting as a WHILL device.<br>
+             This tool parses each command from the host and holds / serves the internal data (Dataset0 / Dataset1).</p>
+          <div style="margin: 0 auto 30px; max-width: 640px; padding: 12px 16px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; color: #856404; font-size: 12pt; line-height: 1.6; text-align: left;">
+            ⚠️ The values shown by this tool are for reference only and do not guarantee the behavior of an actual WHILL device.
+          </div>
+          <button id="initial-connect-button" type="button" class="connect-button">Connect</button>
+        </div>
+      </div>
+
+      <!-- ===== Command Monitor tab ===== -->
+      <div id="monitor-tab" class="tab-content active">
+        <div class="panel">
+          <div class="panel-title">Latest Parsed Command (from host)</div>
+          <div class="monitor-latest">
+            <div class="ml-name" id="latest-cmd-name">— waiting for a command —</div>
+            <div class="ml-hex" id="latest-cmd-hex">&nbsp;</div>
+            <div class="ml-fields" id="latest-cmd-fields"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Command Table (parse coverage &amp; counters)</div>
+          <table class="cmd-count-table">
+            <thead>
+              <tr><th style="width:70px;">ID</th><th>Command</th><th style="width:80px;">Count</th><th>Last parameters</th></tr>
+            </thead>
+            <tbody id="cmd-count-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== Dataset1 (Vehicle Status) tab ===== -->
+      <div id="dataset1-tab" class="tab-content">
+        <div class="sp-controls">
+          <button id="ds1-send-button" type="button" class="serve-button" disabled="">Send Dataset1 Frame</button>
+          <button id="ds1-stream-button" type="button" class="serve-button" disabled="">Start Streaming</button>
+          <button id="ds1-reset-button" type="button" class="clear-button" style="padding:8px 14px;font-size:11pt;">Reset Defaults</button>
+          <span class="sp-status" id="ds1-status">Internal vehicle status held by the emulator. Edits are reflected in streamed frames (AF 1F 01 …). Motor speed &amp; angle are auto-simulated from SET_JOYSTICK / SET_VELOCITY (accel 1.7 m/s², wheel r 0.1325 m); with no input the speed decelerates to 0 at the same rate. Battery current tracks speed (0/1/3/6 km/h → 0/520/720/1220 mA, piecewise-linear). Status is sent, and SET_SPEED_PROFILE / SET_JOYSTICK / SET_VELOCITY are accepted, only while power is ON.</span>
+        </div>
+        <div class="ds-grid" id="ds1-grid"><!-- generated --></div>
+      </div>
+
+      <!-- ===== Dataset0 (Speed Profile) tab ===== -->
+      <div id="dataset0-tab" class="tab-content">
+        <div class="sp-controls">
+          <label style="font-weight:bold;color:#0075B8;">Serve Mode</label>
+          <select id="ds0-mode-select" style="font-size:11pt;padding:4px;border:1px solid #0075B8;border-radius:4px;">
+            <option value="0">0</option><option value="1">1</option><option value="2">2</option>
+            <option value="3">3</option><option value="4">4</option><option value="5">5</option>
+          </select>
+          <button id="ds0-send-button" type="button" class="serve-button" disabled="">Send Dataset0 Frame</button>
+          <button id="ds0-reset-button" type="button" class="clear-button" style="padding:8px 14px;font-size:11pt;">Reset Defaults</button>
+          <span class="sp-status" id="ds0-status">Internal speed profiles (6 modes). SET_SPEED_PROFILE from the host updates these; served as AF 0C 00 …</span>
+        </div>
+        <table class="sp-table">
+          <thead>
+            <tr><th>Mode</th><th>F_M1</th><th>F_A1</th><th>F_D1</th><th class="grp-start">R_M1</th><th>R_A1</th><th>R_D1</th><th class="grp-start">T_M1</th><th>T_A1</th><th>T_D1</th></tr>
+          </thead>
+          <tbody id="ds0-tbody"><!-- generated --></tbody>
+        </table>
+      </div>
+
+      <!-- ===== Device / Capability tab ===== -->
+      <div id="device-tab" class="tab-content">
+        <div class="panel">
+          <div class="panel-title">Firmware / API Version (served on GET_CAPABILITY &amp; RESERVED_7)</div>
+          <div class="settings-row">
+            <label>FW Version</label>
+            <input type="number" id="fw-major" min="80" max="89" value="89"> .
+            <input type="number" id="fw-minor" min="0" max="99" value="1">
+            <span class="ds-hint" style="width:auto;">(must be 8x.xx to be accepted by the Tester)</span>
+          </div>
+          <div class="settings-row">
+            <label>API Version</label>
+            <input type="number" id="api-major" min="0" max="255" value="1"> .
+            <input type="number" id="api-minor" min="0" max="99" value="1">
+          </div>
+          <div class="settings-row">
+            <label><input type="checkbox" id="power-ack-toggle" checked=""> Reply with Power-ON ack (AF 02 52 FF) on SET_POWER(1)</label>
+          </div>
+          <div class="settings-row">
+            <label><input type="checkbox" id="auto-respond-toggle" checked=""> Auto-respond to host requests (version / capability / streaming)</label>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:stretch; flex-wrap:wrap;">
+          <div class="motor-status-card" style="background: linear-gradient(135deg, #e6f6f5 0%, #cfeeec 100%); border: 2px solid #4DBCB6; border-radius: 8px; padding: 10px; flex:1; min-width:280px;">
+            <div class="motor-status-header" style="font-weight: bold; color: #2e7d32; text-align: center; margin-bottom:6px;">✅ Supported Commands (capability cmd map)</div>
+            <div class="cap-grid" id="cap-command-grid"></div>
+          </div>
+          <div class="motor-status-card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #0075B8; border-radius: 8px; padding: 10px; flex:1; min-width:280px;">
+            <div class="motor-status-header" style="font-weight: bold; color: #0075B8; text-align: center; margin-bottom:6px;">📊 Available Data (capability data map / Dataset1)</div>
+            <div class="cap-grid" id="cap-data-grid"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Fixed Compact Log Bar (RX / TX) -->
+    <footer class="shell-log">
+      <div class="log-bar">
+        <div id="data-display"></div>
+        <div class="log-actions">
+          <button id="clear-button" type="button" class="clear-button">Clear</button>
+          <button id="download-csv-button" type="button" class="download-csv-button" disabled="">Download CSV</button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    'use strict';
+
+    /* ========================================================================
+       WHILL Serial API Emulator
+       - Acts as the DEVICE side of the WHILL serial protocol.
+       - Parses each command frame received from the host (the Tester).
+       - Holds internal data: Dataset0 (speed profiles) and Dataset1 (status).
+       - Serves responses: version, capability, power-on ack, and streamed data.
+       Frame format: 0xAF [len] [cmd_id] [params...] [checksum]
+         len = number of bytes after the length byte (params + checksum)
+         checksum = XOR of every byte except the checksum itself
+       ======================================================================== */
+
+    // ----- Command / data definitions (mirror the Tester's capability lists) -----
+    const CAP_COMMANDS = [
+      { id: 0,  name: 'START_SENDING_DATA' },
+      { id: 1,  name: 'STOP_SENDING_DATA' },
+      { id: 2,  name: 'SET_POWER' },
+      { id: 3,  name: 'SET_JOYSTICK' },
+      { id: 4,  name: 'SET_SPEED_PROFILE' },
+      { id: 6,  name: 'SET_BATTERY_SAVING' },
+      { id: 7,  name: 'RESERVED_7' },
+      { id: 8,  name: 'SET_VELOCITY' },
+      { id: 9,  name: 'SET_DEVICE_LOCK' },
+      { id: 10, name: 'SET_JOYSTICK_PAUSE' },
+      { id: 11, name: 'SET_MAX_SPEED_LEVEL' },
+      { id: 12, name: 'SET_SPEED_LEVEL' },
+      { id: 13, name: 'SOUND_HORN' },
+      { id: 14, name: 'SET_AUTO_POWER_OFF' },
+      { id: 15, name: 'GET_SETTINGS' },
+      { id: 16, name: 'GET_CAPABILITY' },
+    ];
+    // Commands advertised in the capability map (public set, fixed per SM Serial API version).
+    // IDs omitted here are reserved: excluded from the capability response, and never re-assigned.
+    const CAP_MAP_COMMAND_IDS = [0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+    // Public Dataset1 offsets. Offsets omitted here are reserved and excluded from the
+    // capability response.
+    const CAP_DATA_FIELDS = [
+      { offset: 2,  name: 'Device Lock' },
+      { offset: 3,  name: 'Joystick Pause' },
+      { offset: 4,  name: 'Max Speed Level' },
+      { offset: 5,  name: 'Speed Level (Selected)' },
+      { offset: 6,  name: 'Auto Power Off' },
+      { offset: 8,  name: 'Trip Distance' },
+      { offset: 12, name: 'Joystick F/B' },
+      { offset: 13, name: 'Joystick L/R' },
+      { offset: 14, name: 'Battery Level' },
+      { offset: 15, name: 'Battery Current' },
+      { offset: 17, name: 'Right Motor Angle' },
+      { offset: 19, name: 'Left Motor Angle' },
+      { offset: 21, name: 'Right Motor Speed' },
+      { offset: 23, name: 'Left Motor Speed' },
+      { offset: 25, name: 'Power' },
+      { offset: 26, name: 'Speed Level (Effective)' },
+      { offset: 27, name: 'Error' },
+      { offset: 28, name: 'Angle Counter' },
+    ];
+
+    // ----- Dataset1 editable-field definition (grouped for the UI) -----
+    const DS1_FIELDS = [
+      { key: 'batterySaving',      group: 'System',  label: 'Battery Saving',  min: 0,      max: 255,   hint: 'raw' },
+      { key: 'buzzer',             group: 'System',  label: 'Buzzer',          min: 0,      max: 255,   hint: 'raw' },
+      { key: 'joystickPause',      group: 'Joystick',label: 'Joystick Pause',  min: 0,      max: 1,     hint: '1=pause' },
+      { key: 'deviceLock',         group: 'System',  label: 'Device Lock',     min: 0,      max: 1,     hint: '1=lock' },
+      { key: 'autoPowerOff',       group: 'System',  label: 'Auto Power Off',  min: 0,      max: 1,     hint: '1=enable' },
+      { key: 'maxSpeedLevel',      group: 'Joystick',label: 'Max Speed Level', min: 0,      max: 255,   hint: '1-4' },
+      { key: 'speedLevel',         group: 'Joystick',label: 'Speed Lv (Sel)',  min: 0,      max: 255,   hint: '1-4, uncapped' },
+      { key: 'speedMode',          group: 'Joystick',label: 'Speed Lv (Eff)',  min: 0,      max: 255,   hint: '0-based, capped' },
+      { key: 'joystickForward',    group: 'Joystick',label: 'Joystick F/B',    min: -128,   max: 127,   hint: 'signed' },
+      { key: 'joystickTurn',       group: 'Joystick',label: 'Joystick L/R',    min: -128,   max: 127,   hint: 'signed' },
+      { key: 'batteryLevel',       group: 'Battery', label: 'Battery Level',   min: 0,      max: 100,   hint: '%' },
+      { key: 'batteryCurrent',     group: 'Battery', label: 'Battery Current', min: -32768, max: 32767, hint: '×2 mA' },
+      { key: 'motorAngleRight',    group: 'Motor Angle', label: 'Angle Right', min: -32768, max: 32767, hint: '×0.001 rad' },
+      { key: 'motorAngleLeft',     group: 'Motor Angle', label: 'Angle Left',  min: -32768, max: 32767, hint: '×0.001 rad' },
+      { key: 'motorSpeedRight',    group: 'Motor Speed', label: 'Speed Right', min: -32768, max: 32767, hint: '×0.004 km/h' },
+      { key: 'motorSpeedLeft',     group: 'Motor Speed', label: 'Speed Left',  min: -32768, max: 32767, hint: '×0.004 km/h' },
+      { key: 'power',              group: 'System',  label: 'Power',           min: 0,      max: 1,     hint: '0=OFF 1=ON' },
+      { key: 'errorCode',          group: 'System',  label: 'Error Code',      min: 0,      max: 255,   hint: '0=none' },
+      { key: 'angleCounter',       group: 'System',  label: 'Angle Counter',   min: 0,      max: 255,   hint: 'raw' },
+      { key: 'tripDistance',       group: 'System',  label: 'Trip Distance',   min: 0,      max: 4294967295, hint: 'm', bits: 32 },
+    ];
+    // Bit width of a Dataset1 field (defaults inferred from the min value of the legacy definitions).
+    function ds1FieldBits(f) { return f.bits || (f.min === -32768 ? 16 : 8); }
+    const DS1_GROUP_ORDER = ['Battery', 'System', 'Motor Angle', 'Motor Speed', 'Joystick'];
+
+    function defaultDataset1() {
+      return {
+        batterySaving: 19, buzzer: 0,
+        joystickPause: 0, deviceLock: 0, autoPowerOff: 1, maxSpeedLevel: 4, speedLevel: 1,
+        joystickForward: 0, joystickTurn: 0,
+        batteryLevel: 75, batteryCurrent: 0,
+        motorAngleRight: 0, motorAngleLeft: 0,
+        motorSpeedRight: 0, motorSpeedLeft: 0,
+        power: 0, speedMode: 0, errorCode: 0, angleCounter: 0,
+        tripDistance: 0,
+      };
+    }
+
+    // Default speed profiles per mode (fM1,fA1,fD1, rM1,rA1,rD1, tM1,tA1,tD1)
+    function defaultDataset0() {
+      const base = [
+        [10, 16, 40, 8, 16, 56, 10, 40, 56],
+        [20, 20, 48, 10, 20, 56, 15, 45, 60],
+        [30, 24, 56, 14, 22, 60, 20, 50, 64],
+        [40, 28, 64, 16, 24, 60, 26, 52, 68],
+        [52, 30, 80, 18, 24, 62, 30, 54, 70],
+        [60, 32, 96, 20, 24, 64, 35, 56, 72],
+      ];
+      return base.map(row => ({
+        fM1: row[0], fA1: row[1], fD1: row[2],
+        rM1: row[3], rA1: row[4], rD1: row[5],
+        tM1: row[6], tA1: row[7], tD1: row[8],
+      }));
+    }
+
+    // ----- Internal state -----
+    const state = {
+      version:    { major: 89, minor: 1 },
+      apiVersion: { major: 1,  minor: 1 },
+      powerOnAck: true,
+      autoRespond: true,
+      dataset1: defaultDataset1(),
+      dataset0: defaultDataset0(),
+      lastVelocity: { priority: 0, fb: 0, lr: 0 },
+    };
+
+    // Per-command counters for the monitor table
+    const cmdStats = {}; // id -> { count, last }
+
+    // ----- DOM refs -----
+    const appShell = document.getElementById('app-shell');
+    const initialConnectButton = document.getElementById('initial-connect-button');
+    const disconnectButton = document.getElementById('disconnect-button');
+    const dataDisplay = document.getElementById('data-display');
+    const clearButton = document.getElementById('clear-button');
+    const downloadCsvButton = document.getElementById('download-csv-button');
+    const streamIndicator = document.getElementById('stream-indicator');
+
+    let port;
+    let reader;
+    let keepReading = false;
+    let isConnected = false;
+    let rxBuffer = new Uint8Array(0);
+    let streamTimer = null;
+    let streamMode = null;   // 'ds1' or 'ds0'
+    let streamDs0Mode = 0;   // which speed-profile mode to serve when streaming ds0
+
+    // ========================= Time / logging =========================
+    function japanTimeParts() {
+      const parts = new Intl.DateTimeFormat('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+      }).formatToParts(new Date());
+      const get = (t) => parts.find((p) => p.type === t).value;
+      return { year: get('year'), month: get('month'), day: get('day'),
+               hours: get('hour'), minutes: get('minute'), seconds: get('second') };
+    }
+    function getJapanTimeString() {
+      const t = japanTimeParts();
+      return `${t.year}/${t.month}/${t.day} ${t.hours}:${t.minutes}:${t.seconds}`;
+    }
+    function getJapanTimeStringForFilename() {
+      const t = japanTimeParts();
+      return `${t.year}${t.month}${t.day}_${t.hours}${t.minutes}${t.seconds}`;
+    }
+    function toHex(bytes) {
+      return Array.from(bytes).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+    }
+    function appendLog(message) {
+      dataDisplay.textContent += message;
+      dataDisplay.scrollTop = dataDisplay.scrollHeight;
+    }
+    function clearLog() { dataDisplay.textContent = ''; }
+    function logRx(bytes)  { appendLog(`[${getJapanTimeString()}] RX: ${toHex(bytes)}\n`); }
+    function logDecoded(text) { appendLog(`[${getJapanTimeString()}]  └ Parsed: ${text}\n`); }
+    function logTx(label, bytes) { appendLog(`[${getJapanTimeString()}] TX (${label}): ${toHex(bytes)}\n`); }
+    function logInfo(text) { appendLog(`[${getJapanTimeString()}] ${text}\n`); }
+
+    // ========================= Tab switching =========================
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+      const map = { monitor: 'monitor-tab', dataset1: 'dataset1-tab', dataset0: 'dataset0-tab', device: 'device-tab' };
+      const id = map[tabName];
+      if (id) document.getElementById(id).classList.add('active');
+      const btn = document.querySelector(`.tab-button[onclick="switchTab('${tabName}')"]`);
+      if (btn) btn.classList.add('active');
+      const sc = document.querySelector('.shell-content');
+      if (sc) sc.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    window.switchTab = switchTab;
+
+    // ========================= Frame helpers =========================
+    // Append a checksum (XOR of all bytes) and return a Uint8Array frame.
+    function withChecksum(bytes) {
+      let cs = 0;
+      for (const b of bytes) cs ^= b;
+      return new Uint8Array([...bytes, cs & 0xFF]);
+    }
+    function s8(v)  { return v > 127 ? v - 256 : v; }
+    function s16(hi, lo) { const v = ((hi << 8) | lo) & 0xFFFF; return v << 16 >> 16; }
+
+    // Write a frame to the serial port.
+    async function sendFrame(label, frame) {
+      if (!(port && port.writable)) return;
+      try {
+        const writer = port.writable.getWriter();
+        await writer.write(frame);
+        writer.releaseLock();
+        logTx(label, frame);
+      } catch (err) {
+        console.error('Send error:', err);
+      }
+    }
+
+    // ---- Response frame builders ----
+    function buildDataset1Frame() {
+      const d = state.dataset1;
+      const data = new Array(29).fill(0);
+      data[0]  = d.batterySaving & 0xFF;
+      data[1]  = d.buzzer & 0xFF;
+      data[2]  = d.deviceLock & 0xFF;
+      data[3]  = d.joystickPause & 0xFF;
+      data[4]  = d.maxSpeedLevel & 0xFF;
+      data[5]  = d.speedLevel & 0xFF;
+      data[6]  = d.autoPowerOff & 0xFF;
+      data[7]  = 0;  // reserved (formerly joystick orientation)
+      const td = (d.tripDistance >>> 0);  // 8..11 trip_distance [m], MSB first
+      data[8]  = (td >>> 24) & 0xFF; data[9]  = (td >>> 16) & 0xFF;
+      data[10] = (td >>> 8)  & 0xFF; data[11] = td & 0xFF;
+      data[12] = d.joystickForward & 0xFF;
+      data[13] = d.joystickTurn & 0xFF;
+      data[14] = d.batteryLevel & 0xFF;
+      const bc = d.batteryCurrent & 0xFFFF; data[15] = (bc >> 8) & 0xFF; data[16] = bc & 0xFF;
+      const ar = d.motorAngleRight & 0xFFFF; data[17] = (ar >> 8) & 0xFF; data[18] = ar & 0xFF;
+      const al = d.motorAngleLeft  & 0xFFFF; data[19] = (al >> 8) & 0xFF; data[20] = al & 0xFF;
+      const sr = d.motorSpeedRight & 0xFFFF; data[21] = (sr >> 8) & 0xFF; data[22] = sr & 0xFF;
+      const sl = d.motorSpeedLeft  & 0xFFFF; data[23] = (sl >> 8) & 0xFF; data[24] = sl & 0xFF;
+      data[25] = d.power & 0xFF;
+      data[26] = d.speedMode & 0xFF;
+      data[27] = d.errorCode & 0xFF;
+      data[28] = d.angleCounter & 0xFF;
+      return withChecksum([0xAF, 0x1F, 0x01, ...data]);
+    }
+    function buildDataset0Frame(mode) {
+      const p = state.dataset0[mode] || state.dataset0[0];
+      return withChecksum([0xAF, 0x0C, 0x00, mode & 0xFF,
+        p.fM1 & 0xFF, p.fA1 & 0xFF, p.fD1 & 0xFF,
+        p.rM1 & 0xFF, p.rA1 & 0xFF, p.rD1 & 0xFF,
+        p.tM1 & 0xFF, p.tA1 & 0xFF, p.tD1 & 0xFF]);
+    }
+    function buildVersionFrame(legacy) {
+      const maj = state.version.major & 0xFF;
+      const min = state.version.minor & 0xFF;
+      return legacy
+        ? withChecksum([0xAF, 0x03, maj, min])                // legacy form (unchanged): AF 03 maj min cs
+        // current form: AF 09 [cmd 0x07][type 0x00] SM(maj,min) HMI(0,0) MC(0,0) cs
+        // (この Emulator は SM 版のみモデル化。HMI/MC は 0.0 で埋める)
+        : withChecksum([0xAF, 0x09, 0x07, 0x00, maj, min, 0x00, 0x00, 0x00, 0x00]);
+    }
+    function buildPowerOnAckFrame() {
+      return withChecksum([0xAF, 0x02, 0x52]);          // -> AF 02 52 FF (released; unchanged)
+    }
+    function buildSettingsFrame() {
+      // AF 08 [cmd 0x0F=GET_SETTINGS] [device_lock][joystick_pause][max_speed_level]
+      //       [speed_level][auto_power_off][power_on] cs
+      // フィールド順は Dataset1 offset 2-6 と同順 + power_on(Dataset1 offset25)。
+      const d = state.dataset1;
+      return withChecksum([0xAF, 0x08, 0x0F,
+        d.deviceLock & 0xFF, d.joystickPause & 0xFF, d.maxSpeedLevel & 0xFF,
+        d.speedLevel & 0xFF, d.autoPowerOff & 0xFF, d.power & 0xFF]);
+    }
+    // Bitmap byte lengths of the capability response (command map: IDs 0-63, data map: Dataset1 offsets 0-31).
+    const CAP_COMMAND_MAP_LEN = 8;
+    const CAP_DATA_MAP_LEN    = 4;
+    // Build a bitmap of `byteLen` bytes from a list of bit indices (byte = floor(i/8), bit = i%8).
+    function buildBitMap(indices, byteLen) {
+      const map = new Array(byteLen).fill(0);
+      indices.forEach(i => { const byte = Math.floor(i / 8); if (byte < byteLen) map[byte] |= (1 << (i % 8)); });
+      return map;
+    }
+    function buildCapabilityFrame() {
+      const cmdMap  = buildBitMap(getEnabledCommandIds(), CAP_COMMAND_MAP_LEN);
+      const dataMap = buildBitMap(getEnabledDataOffsets(), CAP_DATA_MAP_LEN);
+      // AF 10 [cmd 0x10=GET_CAPABILITY] [api_major][api_minor] [cmdMap 8][dataMap 4] cs
+      const len = CAP_COMMAND_MAP_LEN + CAP_DATA_MAP_LEN + 4;  // cmd id + api(2) + maps + checksum
+      return withChecksum([0xAF, len, 0x10,
+        state.apiVersion.major & 0xFF, state.apiVersion.minor & 0xFF,
+        ...cmdMap, ...dataMap]);
+    }
+
+    // Power gating: status is sent, and SET_SPEED_PROFILE/SET_JOYSTICK/SET_VELOCITY are
+    // accepted, only while the emulated vehicle is powered ON.
+    function isPowerOn() { return state.dataset1.power === 1; }
+    // Manual Dataset1 send (right strip / Dataset1 tab) — blocked with a reason when power OFF.
+    function serveDataset1() {
+      if (!isPowerOn()) { logInfo('Dataset1 not sent (power OFF)'); return; }
+      sendFrame('Dataset1', buildDataset1Frame());
+    }
+    // Manual Dataset0 (speed profile) send — also gated on power ON.
+    function serveDataset0(mode) {
+      if (!isPowerOn()) { logInfo('Dataset0 not sent (power OFF)'); return; }
+      sendFrame('Dataset0', buildDataset0Frame(mode));
+    }
+
+    // ========================= Streaming =========================
+    function stopStreaming(silent) {
+      if (streamTimer) { clearInterval(streamTimer); streamTimer = null; }
+      streamMode = null;
+      updateStreamIndicator();
+      if (!silent) logInfo('Streaming stopped');
+    }
+    function startStreaming(mode, intervalMs, ds0Mode) {
+      stopStreaming(true);
+      streamMode = mode;
+      streamDs0Mode = ds0Mode || 0;
+      const interval = Math.max(20, intervalMs || 500);
+      const tick = () => {
+        if (!(port && port.writable)) { stopStreaming(true); return; }
+        // Both datasets are emitted only while powered ON; skip silently otherwise.
+        if (!isPowerOn()) return;
+        if (streamMode === 'ds1') sendFrame('Dataset1', buildDataset1Frame());
+        else if (streamMode === 'ds0') sendFrame('Dataset0', buildDataset0Frame(streamDs0Mode));
+      };
+      tick(); // send one immediately
+      streamTimer = setInterval(tick, interval);
+      updateStreamIndicator(interval);
+    }
+    function updateStreamIndicator(interval) {
+      if (!streamMode) {
+        streamIndicator.textContent = 'Streaming: idle';
+        streamIndicator.style.color = '#666666';
+      } else {
+        const label = streamMode === 'ds1' ? 'Dataset1 (status)' : `Dataset0 (mode ${streamDs0Mode})`;
+        streamIndicator.textContent = `Streaming: ${label} @ ${interval || '?'}ms`;
+        streamIndicator.style.color = '#4DBCB6';
+      }
+    }
+
+    // ========================= Motion physics (motor speed / angle) =========================
+    // Simulates left/right motor speed & angle from drive inputs.
+    //  - Sign convention (from the reference screenshots):
+    //      forward  -> Right(-), Left(+)     turn-right -> Right(+), Left(+)
+    //      backward -> Right(+), Left(-)     turn-left  -> Right(-), Left(-)
+    //    i.e. motorRight = -forward + turn , motorLeft = +forward + turn
+    //  - Acceleration fixed at 1.7 m/s^2 (shared by SET_JOYSTICK / SET_VELOCITY).
+    //  - Wheel radius 0.1325 m is used for the angle: dθ = v / r · dt, wrapped to [-π, π).
+    //  - Speed ramps toward the commanded target while a drive input is active
+    //    (SET_JOYSTICK / SET_VELOCITY / the Tester's virtual joystick, which arrives as
+    //    SET_JOYSTICK). With no input for INPUT_TIMEOUT_MS the target becomes 0, so the
+    //    motor speed decelerates to a stop at the same 1.7 m/s² (angle keeps integrating
+    //    until speed reaches 0, then holds).
+    const ACCEL_MS2 = 1.7;          // fixed acceleration [m/s^2]
+    const WHEEL_R_M = 0.1325;       // wheel radius [m]
+    const MAX_SPEED_KMH = 6.0;      // body speed at full joystick (±100) — from screenshot #1
+    const MAX_SPEED_MS = MAX_SPEED_KMH / 3.6;
+    const JOY_FULL = 100;           // joystick full-scale magnitude
+    const VEL_FULL = 1500;          // SET_VELOCITY full-scale: 1500 -> 6 km/h (0.004 km/h/LSB)
+    const PHYS_DT_MS = 50;          // physics tick period
+    const INPUT_TIMEOUT_MS = 300;   // input treated as "released" after this idle gap
+
+    let physTimer = null;
+    let physLastTime = 0;
+    let driveActiveUntil = 0;
+    let targetRightMs = 0, targetLeftMs = 0;
+    let curRightMs = 0, curLeftMs = 0;
+    let angleRightRad = 0, angleLeftRad = 0;
+
+    const clampMs = (v) => Math.max(-MAX_SPEED_MS, Math.min(MAX_SPEED_MS, v));
+    // Mix body-frame forward/turn (m/s) into per-motor target speeds and mark input active.
+    function setDriveTarget(fwdMs, turnMs) {
+      targetRightMs = clampMs(-fwdMs + turnMs);
+      targetLeftMs  = clampMs(+fwdMs + turnMs);
+      driveActiveUntil = Date.now() + INPUT_TIMEOUT_MS;
+    }
+    // SET_JOYSTICK / virtual joystick: components in [-100, 100]
+    function applyJoystickDrive(fb, lr) {
+      setDriveTarget((fb / JOY_FULL) * MAX_SPEED_MS, (lr / JOY_FULL) * MAX_SPEED_MS);
+    }
+    // SET_VELOCITY: signed 16-bit components, full-scale ±1500 -> ±6 km/h (body frame)
+    function applyVelocityDrive(fb, lr) {
+      setDriveTarget((fb / VEL_FULL) * MAX_SPEED_MS, (lr / VEL_FULL) * MAX_SPEED_MS);
+    }
+    function rampToward(cur, tgt, step) {
+      if (cur < tgt) return Math.min(cur + step, tgt);
+      if (cur > tgt) return Math.max(cur - step, tgt);
+      return cur;
+    }
+    const msToRawSpeed = (ms) => Math.round(ms * 900);    // m/s -> 0.004 km/h LSB (m/s·3.6/0.004)
+    // Battery current [mA] vs speed [km/h] — piecewise-linear through the reference points.
+    // (0,0) (1,520) (3,720) (6,1220); beyond 6 km/h the last segment slope is extrapolated.
+    const CURRENT_POINTS = [[0, 0], [1, 520], [3, 720], [6, 1220]];
+    function currentFromSpeedKmh(vKmh) {
+      const v = Math.abs(vKmh);
+      const P = CURRENT_POINTS;
+      for (let i = 1; i < P.length; i++) {
+        if (v <= P[i][0]) {
+          const [x0, y0] = P[i - 1], [x1, y1] = P[i];
+          return y0 + (y1 - y0) * (v - x0) / (x1 - x0);
+        }
+      }
+      const [x0, y0] = P[P.length - 2], [x1, y1] = P[P.length - 1];
+      return y1 + (y1 - y0) * (v - x1) / (x1 - x0);   // extrapolate above 6 km/h
+    }
+    const TWO_PI = Math.PI * 2;
+    // Wrap an angle into the motor-angle range [-π, π).
+    function wrapPi(a) {
+      a = a % TWO_PI;
+      if (a >= Math.PI) a -= TWO_PI;
+      else if (a < -Math.PI) a += TWO_PI;
+      return a;
+    }
+    const radToRawAngle = (rad) => Math.round(rad * 1000);  // rad -> 0.001 rad LSB (already within ±π)
+    function resetPhysics() {
+      driveActiveUntil = 0; physLastTime = 0;
+      targetRightMs = targetLeftMs = 0;
+      curRightMs = curLeftMs = 0;
+      angleRightRad = angleLeftRad = 0;
+      state.dataset1.motorSpeedRight = state.dataset1.motorSpeedLeft = 0;
+      state.dataset1.motorAngleRight = state.dataset1.motorAngleLeft = 0;
+      state.dataset1.batteryCurrent = 0;
+    }
+    function physicsTick() {
+      const now = Date.now();
+      const dt = physLastTime ? Math.min(0.2, (now - physLastTime) / 1000) : PHYS_DT_MS / 1000;
+      physLastTime = now;
+
+      // With no active input the target is 0, so the vehicle coasts down to a stop.
+      const active = now < driveActiveUntil;
+      const tR = active ? targetRightMs : 0;
+      const tL = active ? targetLeftMs : 0;
+      if (!active && curRightMs === 0 && curLeftMs === 0) return;   // stopped & idle -> nothing to do
+
+      const step = ACCEL_MS2 * dt;
+      curRightMs = rampToward(curRightMs, tR, step);
+      curLeftMs  = rampToward(curLeftMs, tL, step);
+      angleRightRad = wrapPi(angleRightRad + (curRightMs / WHEEL_R_M) * dt);  // keep within [-π, π)
+      angleLeftRad  = wrapPi(angleLeftRad  + (curLeftMs  / WHEEL_R_M) * dt);
+
+      state.dataset1.motorSpeedRight = msToRawSpeed(curRightMs) & 0xFFFF;
+      state.dataset1.motorSpeedLeft  = msToRawSpeed(curLeftMs) & 0xFFFF;
+      state.dataset1.motorAngleRight = radToRawAngle(angleRightRad) & 0xFFFF;
+      state.dataset1.motorAngleLeft  = radToRawAngle(angleLeftRad) & 0xFFFF;
+
+      // Battery current from representative speed (mean wheel-speed magnitude).
+      const speedKmh = (Math.abs(curRightMs) + Math.abs(curLeftMs)) / 2 * 3.6;
+      state.dataset1.batteryCurrent = Math.round(currentFromSpeedKmh(speedKmh) / 2) & 0xFFFF; // field LSB = 2 mA
+
+      syncPhysicsInputs();
+      updateLiveView();
+    }
+    // Update only the physics-owned Dataset1 inputs (never clobber the field being edited).
+    function syncPhysicsInputs() {
+      ['motorSpeedRight', 'motorSpeedLeft', 'motorAngleRight', 'motorAngleLeft', 'batteryCurrent'].forEach(key => {
+        const el = document.getElementById(`ds1-${key}`);
+        if (el && el !== document.activeElement) el.value = s16Val(state.dataset1[key]);
+      });
+    }
+    function startPhysics() { if (physTimer) clearInterval(physTimer); physTimer = setInterval(physicsTick, PHYS_DT_MS); }
+    function stopPhysics() { if (physTimer) { clearInterval(physTimer); physTimer = null; } }
+
+    // ========================= Frame parsing / dispatch =========================
+    function handleIncoming(chunk) {
+      const merged = new Uint8Array(rxBuffer.length + chunk.length);
+      merged.set(rxBuffer);
+      merged.set(chunk, rxBuffer.length);
+      rxBuffer = merged;
+
+      let i = 0;
+      while (i < rxBuffer.length) {
+        if (rxBuffer[i] !== 0xAF) { i++; continue; }        // resync to protocol sign
+        if (rxBuffer.length - i < 2) break;                 // need length byte
+        const len = rxBuffer[i + 1];
+        if (len < 1) { i++; continue; }                     // invalid length
+        const total = len + 2;                              // sign + len + payload + checksum
+        if (rxBuffer.length - i < total) break;             // wait for the rest of the frame
+
+        const frame = rxBuffer.slice(i, i + total);
+        let cs = 0;
+        for (let k = 0; k < total - 1; k++) cs ^= frame[k];
+        const ok = (cs === frame[total - 1]);
+
+        logRx(frame);
+        if (ok) {
+          dispatchCommand(frame);
+        } else {
+          logDecoded(`⚠ checksum mismatch (expected 0x${cs.toString(16).toUpperCase().padStart(2,'0')})`);
+        }
+        i += total;
+      }
+      rxBuffer = rxBuffer.slice(i);
+    }
+
+    // frame = [0xAF, len, cmd, ...params, checksum]
+    function dispatchCommand(frame) {
+      const payload = Array.from(frame.slice(2, frame.length - 1)); // cmd + params
+      const cmd = payload[0];
+      const params = payload.slice(1);
+      let name = 'UNKNOWN';
+      let fields = [];
+
+      switch (cmd) {
+        case 0x00: { // START_SENDING_DATA
+          name = 'START_SENDING_DATA';
+          const dataset = params[0] ?? 0;
+          const interval = ((params[1] ?? 0) << 8) | (params[2] ?? 0);
+          const profile = params[3] ?? 0;
+          fields = [['Dataset', dataset], ['Interval', `${interval} ms`], ['Profile', profile]];
+          if (state.autoRespond) {
+            if (dataset === 0) startStreaming('ds0', interval, profile);
+            else startStreaming('ds1', interval, 0);
+          }
+          break;
+        }
+        case 0x01: { // STOP_SENDING_DATA
+          name = 'STOP_SENDING_DATA';
+          if (state.autoRespond) stopStreaming(true);
+          break;
+        }
+        case 0x02: { // SET_POWER
+          name = 'SET_POWER';
+          const s = params[0] ?? 0;
+          fields = [['State', s === 1 ? 'ON (1)' : `${s}`]];
+          state.dataset1.power = s ? 1 : 0;
+          syncDataset1Inputs();
+          updateLiveView();
+          if (state.autoRespond && state.powerOnAck && s === 1) {
+            sendFrame('Power-ON ack', buildPowerOnAckFrame());
+          }
+          break;
+        }
+        case 0x03: { // SET_JOYSTICK
+          name = 'SET_JOYSTICK';
+          const pr = params[0] ?? 0, fb = s8(params[1] ?? 0), lr = s8(params[2] ?? 0);
+          fields = [['Body Priority', pr], ['F/B', fb], ['L/R', lr]];
+          if (isPowerOn()) {
+            // Commands motion (motor speed/angle) only. The reported "Joystick" data
+            // reflects the body's physical joystick, so it is NOT updated here — it is
+            // set manually in the Dataset1 tab on this emulator.
+            applyJoystickDrive(fb, lr);
+          } else {
+            fields.push(['(ignored)', 'power OFF']);
+          }
+          break;
+        }
+        case 0x04: { // SET_SPEED_PROFILE
+          name = 'SET_SPEED_PROFILE';
+          const mode = params[0] ?? 0;
+          const v = params.slice(1, 10);
+          fields = [['Mode', mode],
+            ['F', `${v[0]},${v[1]},${v[2]}`], ['R', `${v[3]},${v[4]},${v[5]}`], ['T', `${v[6]},${v[7]},${v[8]}`]];
+          if (!isPowerOn()) {
+            fields.push(['(ignored)', 'power OFF']);
+          } else if (mode >= 0 && mode <= 5 && v.length === 9) {
+            state.dataset0[mode] = {
+              fM1: v[0], fA1: v[1], fD1: v[2],
+              rM1: v[3], rA1: v[4], rD1: v[5],
+              tM1: v[6], tA1: v[7], tD1: v[8],
+            };
+            syncDataset0Row(mode);
+          }
+          break;
+        }
+        case 0x06: { // SET_BATTERY_SAVING (deprecated, not advertised; buzzer is raw 0-255)
+          name = 'SET_BATTERY_SAVING';
+          const lvl = params[0] ?? 0, bz = params[1] ?? 0;
+          fields = [['Level', lvl], ['Buzzer', bz]];
+          state.dataset1.batterySaving = lvl;
+          state.dataset1.buzzer = bz;
+          syncDataset1Inputs();
+          break;
+        }
+        case 0x07: { // Reserved: version query (current and legacy forms)
+          const legacy = (params.length === 0); // AF 02 07 AA has no parameter
+          name = legacy ? 'RESERVED_7 (legacy)' : 'RESERVED_7';
+          if (!legacy) fields = [['Info Type', params[0] ?? 0]];
+          if (state.autoRespond) sendFrame(legacy ? 'FW version (legacy)' : 'FW version', buildVersionFrame(legacy));
+          break;
+        }
+        case 0x08: { // SET_VELOCITY
+          name = 'SET_VELOCITY';
+          const pr = params[0] ?? 0;
+          const fb = s16(params[1] ?? 0, params[2] ?? 0);
+          const lr = s16(params[3] ?? 0, params[4] ?? 0);
+          fields = [['Body Priority', pr], ['F/B spd', fb], ['L/R spd', lr]];
+          if (isPowerOn()) {
+            state.lastVelocity = { priority: pr, fb, lr };
+            applyVelocityDrive(fb, lr);   // drive motor speed/angle simulation
+          } else {
+            fields.push(['(ignored)', 'power OFF']);
+          }
+          break;
+        }
+        case 0x09: { // SET_DEVICE_LOCK
+          name = 'SET_DEVICE_LOCK';
+          const l = params[0] ?? 0;
+          // 1 との一致判定のみ。1 以外はすべて Unlock 扱い。
+          fields = [['Lock', l === 1 ? 'Locked (1)' : `Unlocked (${l})`]];
+          state.dataset1.deviceLock = (l === 1) ? 1 : 0;
+          syncDataset1Inputs();
+          updateLiveView();
+          break;
+        }
+        case 0x0A: { // SET_JOYSTICK_PAUSE
+          name = 'SET_JOYSTICK_PAUSE';
+          const l = params[0] ?? 0;
+          fields = [['Pause', l === 1 ? 'Paused (1)' : `Active (${l})`]];
+          state.dataset1.joystickPause = l;
+          syncDataset1Inputs();
+          updateLiveView();
+          break;
+        }
+        case 0x0B: { // SET_MAX_SPEED_LEVEL
+          name = 'SET_MAX_SPEED_LEVEL';
+          const raw = params[0] ?? 0;
+          // 実機(SM)は範囲外を 1-4 にクランプする。
+          const m = Math.min(4, Math.max(1, raw));
+          fields = [['Max Speed Level', m]];
+          if (m !== raw) fields.push(['(clamped from)', raw]);
+          state.dataset1.maxSpeedLevel = m;
+          applyEffectiveSpeedMode();
+          syncDataset1Inputs();
+          updateLiveView();
+          break;
+        }
+        case 0x0C: { // SET_SPEED_LEVEL
+          name = 'SET_SPEED_LEVEL';
+          const lv = params[0] ?? 0;
+          fields = [['Speed Level', lv]];
+          // 実機は OFF/standby 時に適用。範囲外は HMI が reject する。
+          if (lv >= 1 && lv <= 4) {
+            state.dataset1.speedLevel = lv;
+            applyEffectiveSpeedMode();
+            syncDataset1Inputs();
+            updateLiveView();
+          } else {
+            fields.push(['(ignored)', 'out of range']);
+          }
+          break;
+        }
+        case 0x0D: { // SOUND_HORN
+          name = 'SOUND_HORN';
+          const s = params[0] ?? 0;
+          fields = [['Horn', s === 1 ? 'Sound (1)' : `(ignored: ${s})`]];
+          // 瞬時トリガのため保持状態は無い（鳴動はHMI/MC側の挙動）。
+          break;
+        }
+        case 0x0E: { // SET_AUTO_POWER_OFF
+          name = 'SET_AUTO_POWER_OFF';
+          const a = params[0] ?? 0;
+          fields = [['Auto Power Off', a === 1 ? 'Enabled (1)' : `Disabled (${a})`]];
+          // 無操作継続時の自動電源OFF。有効の間 SM は RUN状態継続要求を送らない。応答は無い。
+          state.dataset1.autoPowerOff = (a === 1) ? 1 : 0;
+          syncDataset1Inputs();
+          updateLiveView();
+          break;
+        }
+        case 0x0F: { // GET_SETTINGS
+          name = 'GET_SETTINGS';
+          fields = [
+            ['Device Lock', state.dataset1.deviceLock],
+            ['Joystick Pause', state.dataset1.joystickPause],
+            ['Max Speed Level', state.dataset1.maxSpeedLevel],
+            ['Speed Level', state.dataset1.speedLevel],
+            ['Auto Power Off', state.dataset1.autoPowerOff],
+            ['Power On', state.dataset1.power & 0xFF],
+          ];
+          // 要求→応答。電源状態に依らず現在の設定値をまとめて返す。
+          if (state.autoRespond) sendFrame('Settings', buildSettingsFrame());
+          break;
+        }
+        case 0x10: { // GET_CAPABILITY
+          name = 'GET_CAPABILITY';
+          if (state.autoRespond) sendFrame('Capability', buildCapabilityFrame());
+          break;
+        }
+
+        default:
+          name = `UNKNOWN (id 0x${(cmd ?? 0).toString(16).toUpperCase().padStart(2, '0')})`;
+          fields = [['Params', params.length ? toHex(params) : '(none)']];
+      }
+
+      // Log a concise decoded line
+      const fieldText = fields.length ? fields.map(([k, v]) => `${k}=${v}`).join(', ') : '(no params)';
+      logDecoded(`${name} ${fields.length ? '{ ' + fieldText + ' }' : ''}`.trim());
+
+      // Update monitor UI
+      recordCommand(cmd, name, fields);
+    }
+
+    // ========================= Monitor UI =========================
+    function recordCommand(cmd, name, fields) {
+      const stat = cmdStats[cmd] || { count: 0, last: '' };
+      stat.count += 1;
+      stat.last = fields.length ? fields.map(([k, v]) => `${k}=${v}`).join(', ') : '—';
+      cmdStats[cmd] = stat;
+
+      // Latest command panel
+      document.getElementById('latest-cmd-name').textContent = name;
+      document.getElementById('latest-cmd-hex').textContent = '(see log below)';
+      const fc = document.getElementById('latest-cmd-fields');
+      fc.innerHTML = fields.length
+        ? fields.map(([k, v]) => `<span class="ml-field"><b>${k}</b>: ${v}</span>`).join('')
+        : '<span class="ml-field">no parameters</span>';
+
+      refreshCmdCountTable();
+    }
+    function refreshCmdCountTable() {
+      const body = document.getElementById('cmd-count-body');
+      body.innerHTML = CAP_COMMANDS.map(c => {
+        const st = cmdStats[c.id];
+        const cls = st && st.count > 0 ? ' class="hit"' : '';
+        const idHex = '0x' + c.id.toString(16).toUpperCase().padStart(2, '0');
+        return `<tr${cls}><td>${idHex}</td><td>${c.name}</td><td class="count">${st ? st.count : 0}</td><td class="params">${st ? st.last : '—'}</td></tr>`;
+      }).join('');
+    }
+
+    // speed_mode_indicator は MC が実際に適用する 0起点の値で、max speed level で頭打ちになる。
+    // speed_level(ユーザー選択値) は頭打ちにならないため、制限中は両者がずれる。
+    function applyEffectiveSpeedMode() {
+      const d = state.dataset1;
+      d.speedMode = Math.min(d.speedLevel, d.maxSpeedLevel) - 1;
+    }
+
+    // ========================= Live status view (right strip) =========================
+    function updateLiveView() {
+      const d = state.dataset1;
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      set('live-battery-level', `${d.batteryLevel}%`);
+      set('live-battery-current', `${(s16Val(d.batteryCurrent) * 2).toFixed(0)}mA`);
+      set('live-power-status', d.power ? 'ON' : 'OFF');
+      set('live-error-code', d.errorCode ? d.errorCode : 'None');
+      set('live-angle-counter', d.angleCounter);
+      // trip_distance は 1m 単位。表示は km に統一する。
+      set('live-trip-distance', `${((d.tripDistance >>> 0) / 1000).toFixed(2)}km`);
+      set('live-motor-angle-right', `${(s16Val(d.motorAngleRight) * 0.001).toFixed(3)}rad`);
+      set('live-motor-angle-left', `${(s16Val(d.motorAngleLeft) * 0.001).toFixed(3)}rad`);
+      set('live-motor-speed-right', `${(s16Val(d.motorSpeedRight) * 0.004).toFixed(3)}km/h`);
+      set('live-motor-speed-left', `${(s16Val(d.motorSpeedLeft) * 0.004).toFixed(3)}km/h`);
+      set('live-joystick-forward', s8(d.joystickForward & 0xFF));
+      set('live-joystick-turn', s8(d.joystickTurn & 0xFF));
+      set('live-joystick-pause', d.joystickPause === 1 ? 'Paused' : 'Active');
+      set('live-max-speed-level', d.maxSpeedLevel);
+      set('live-speed-level', d.speedLevel);
+      // speed_mode_indicator は 0起点なのでレベル表記(+1)にして並べる。
+      set('live-speed-mode', d.speedMode + 1);
+
+      const err = document.getElementById('live-error-code');
+      if (err) { err.style.color = d.errorCode ? '#E94816' : '#000'; err.style.fontWeight = d.errorCode ? 'bold' : 'bold'; }
+      const bat = document.getElementById('live-battery-level');
+      if (bat) bat.style.color = d.batteryLevel <= 19 ? '#E94816' : '#000';
+    }
+    // Interpret a possibly-masked stored value as signed 16-bit if it looks masked.
+    function s16Val(v) { const m = v & 0xFFFF; return m << 16 >> 16; }
+
+    // ========================= Dataset1 tab (editable fields) =========================
+    function buildDataset1Grid() {
+      const grid = document.getElementById('ds1-grid');
+      const byGroup = {};
+      DS1_FIELDS.forEach(f => { (byGroup[f.group] = byGroup[f.group] || []).push(f); });
+      grid.innerHTML = DS1_GROUP_ORDER.map(group => {
+        const rows = (byGroup[group] || []).map(f => `
+          <div class="ds-row">
+            <label for="ds1-${f.key}">${f.label}</label>
+            <input type="number" class="ds-input" id="ds1-${f.key}" min="${f.min}" max="${f.max}" value="${state.dataset1[f.key]}">
+            <span class="ds-hint">${f.hint}</span>
+          </div>`).join('');
+        return `<div class="ds-card"><div class="ds-card-title">${group}</div>${rows}</div>`;
+      }).join('');
+
+      // Wire inputs -> state (store raw bytes, masked to the field width)
+      DS1_FIELDS.forEach(f => {
+        const el = document.getElementById(`ds1-${f.key}`);
+        el.addEventListener('input', () => {
+          let v = parseInt(el.value, 10); if (isNaN(v)) v = 0;
+          const bits = ds1FieldBits(f);
+          const mask = bits === 32 ? 0xFFFFFFFF : (bits === 16 ? 0xFFFF : 0xFF);
+          state.dataset1[f.key] = (v & mask) >>> 0;
+          updateLiveView();
+        });
+      });
+    }
+    // Reflect state.dataset1 back into the input fields (after SET_* commands),
+    // presenting stored raw bytes as signed where the field is signed.
+    function syncDataset1Inputs() {
+      DS1_FIELDS.forEach(f => {
+        const el = document.getElementById(`ds1-${f.key}`);
+        if (!el || el === document.activeElement) return;
+        const raw = state.dataset1[f.key];
+        if (f.min === -32768)      el.value = s16Val(raw);   // signed 16-bit
+        else if (f.min === -128)   el.value = s8(raw & 0xFF); // signed 8-bit
+        else                       el.value = raw;            // unsigned
+      });
+    }
+
+    // ========================= Dataset0 tab (speed profile table) =========================
+    const SP_COLS = ['fM1', 'fA1', 'fD1', 'rM1', 'rA1', 'rD1', 'tM1', 'tA1', 'tD1'];
+    function buildDataset0Table() {
+      const tbody = document.getElementById('ds0-tbody');
+      tbody.innerHTML = state.dataset0.map((p, mode) => {
+        const cell = (col, idx) => {
+          const grp = (idx === 3 || idx === 6) ? ' class="grp-start"' : '';
+          return `<td${grp}><input type="number" class="sp-input" id="sp-${col}-${mode}" min="0" max="255" value="${p[col]}"></td>`;
+        };
+        return `<tr><th>${mode}</th>${SP_COLS.map((c, idx) => cell(c, idx)).join('')}</tr>`;
+      }).join('');
+
+      // Wire inputs -> state
+      state.dataset0.forEach((p, mode) => {
+        SP_COLS.forEach(col => {
+          const el = document.getElementById(`sp-${col}-${mode}`);
+          el.addEventListener('input', () => {
+            let v = parseInt(el.value, 10); if (isNaN(v)) v = 0;
+            state.dataset0[mode][col] = Math.max(0, Math.min(255, v));
+          });
+        });
+      });
+    }
+    function syncDataset0Row(mode) {
+      const p = state.dataset0[mode];
+      SP_COLS.forEach(col => {
+        const el = document.getElementById(`sp-${col}-${mode}`);
+        if (el) el.value = p[col];
+      });
+      const st = document.getElementById('ds0-status');
+      if (st) { st.textContent = `Mode ${mode} updated by SET_SPEED_PROFILE from host.`; st.className = 'sp-status ok'; }
+    }
+
+    // ========================= Device / Capability tab =========================
+    function buildCapabilityGrids() {
+      const cmdGrid = document.getElementById('cap-command-grid');
+      cmdGrid.innerHTML = CAP_COMMANDS
+        .filter(c => CAP_MAP_COMMAND_IDS.includes(c.id))
+        .map(c => `<label><input type="checkbox" class="cap-cmd" data-id="${c.id}" checked> ${c.name}</label>`)
+        .join('');
+      const dataGrid = document.getElementById('cap-data-grid');
+      dataGrid.innerHTML = CAP_DATA_FIELDS
+        .map(f => `<label><input type="checkbox" class="cap-data" data-offset="${f.offset}" checked> ${f.name}</label>`)
+        .join('');
+    }
+    function getEnabledCommandIds() {
+      return Array.from(document.querySelectorAll('.cap-cmd'))
+        .filter(cb => cb.checked).map(cb => parseInt(cb.dataset.id, 10));
+    }
+    function getEnabledDataOffsets() {
+      return Array.from(document.querySelectorAll('.cap-data'))
+        .filter(cb => cb.checked).map(cb => parseInt(cb.dataset.offset, 10));
+    }
+    function wireDeviceSettings() {
+      const fwMajor = document.getElementById('fw-major');
+      const fwMinor = document.getElementById('fw-minor');
+      const apiMajor = document.getElementById('api-major');
+      const apiMinor = document.getElementById('api-minor');
+      const powerAck = document.getElementById('power-ack-toggle');
+      const autoResp = document.getElementById('auto-respond-toggle');
+      const updateVersion = () => {
+        state.version.major = parseInt(fwMajor.value, 10) || 0;
+        state.version.minor = parseInt(fwMinor.value, 10) || 0;
+        document.getElementById('header-fw-version').textContent =
+          `${state.version.major}.${String(state.version.minor).padStart(2, '0')}`;
+      };
+      fwMajor.addEventListener('input', updateVersion);
+      fwMinor.addEventListener('input', updateVersion);
+      apiMajor.addEventListener('input', () => state.apiVersion.major = parseInt(apiMajor.value, 10) || 0);
+      apiMinor.addEventListener('input', () => state.apiVersion.minor = parseInt(apiMinor.value, 10) || 0);
+      powerAck.addEventListener('change', () => state.powerOnAck = powerAck.checked);
+      autoResp.addEventListener('change', () => state.autoRespond = autoResp.checked);
+      updateVersion();
+    }
+
+    // ========================= Serve controls (buttons) =========================
+    function setServeButtonsEnabled(enabled) {
+      ['ds1-send-button', 'ds1-stream-button', 'ds0-send-button'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.disabled = !enabled;
+      });
+    }
+    function wireServeControls() {
+      document.getElementById('send-ds1-button').addEventListener('click', serveDataset1);
+      document.getElementById('stream-ds1-button').addEventListener('click', () => startStreaming('ds1', 500, 0));
+      document.getElementById('stop-stream-button').addEventListener('click', () => stopStreaming(false));
+      document.getElementById('send-ds0-button').addEventListener('click', () => {
+        serveDataset0(parseInt(document.getElementById('ds0-mode-select').value, 10) || 0);
+      });
+
+      document.getElementById('ds1-send-button').addEventListener('click', serveDataset1);
+      document.getElementById('ds1-stream-button').addEventListener('click', () => startStreaming('ds1', 500, 0));
+      document.getElementById('ds1-reset-button').addEventListener('click', () => {
+        state.dataset1 = defaultDataset1(); syncDataset1Inputs(); updateLiveView();
+      });
+      document.getElementById('ds0-send-button').addEventListener('click', () => {
+        serveDataset0(parseInt(document.getElementById('ds0-mode-select').value, 10) || 0);
+      });
+      document.getElementById('ds0-reset-button').addEventListener('click', () => {
+        state.dataset0 = defaultDataset0();
+        for (let m = 0; m <= 5; m++) syncDataset0Row(m);
+      });
+    }
+
+    // ========================= CSV download =========================
+    function downloadCsv(filename) {
+      const logText = dataDisplay.textContent;
+      if (!logText.trim()) { alert('No log data to download.'); return; }
+      const lines = logText.split('\n').filter(l => l.trim());
+      const rows = ['Timestamp,Type,Data'];
+      lines.forEach(line => {
+        const tsMatch = line.match(/\[([^\]]+)\]/);
+        if (!tsMatch) return;
+        const after = line.substring(line.indexOf(']') + 1).trim();
+        const colon = after.indexOf(':');
+        if (colon === -1) return;
+        const type = after.substring(0, colon).trim();
+        const data = after.substring(colon + 1).trim();
+        const q = (s) => `"${s.replace(/"/g, '""')}"`;
+        rows.push(`${q(tsMatch[1])},${q(type)},${q(data)}`);
+      });
+      const blob = new Blob(['﻿' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = filename;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    // ========================= Serial read loop =========================
+    async function startReading() {
+      while (port.readable && keepReading) {
+        reader = port.readable.getReader();
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) { reader.releaseLock(); break; }
+            if (value) handleIncoming(value);
+          }
+        } catch (err) {
+          console.error('Read error:', err);
+        } finally {
+          reader.releaseLock();
+        }
+      }
+    }
+
+    // ========================= Connect / disconnect =========================
+    function updateConnectionUI(connected) {
+      appShell.classList.toggle('connected', connected);
+    }
+    async function connectSerial() {
+      try {
+        port = await navigator.serial.requestPort({});
+        await port.open({ baudRate: 38400 });
+        isConnected = true;
+        keepReading = true;
+        rxBuffer = new Uint8Array(0);
+        updateConnectionUI(true);
+        setServeButtonsEnabled(true);
+        downloadCsvButton.disabled = false;
+        resetPhysics();
+        syncDataset1Inputs();
+        updateLiveView();
+        refreshCmdCountTable();
+        startPhysics();
+        logInfo('Connected — emulating WHILL device @ 38400 baud');
+        startReading();
+      } catch (err) {
+        console.error('Connection error:', err);
+        alert('Connection failed. Please check the device / port.');
+      }
+    }
+    async function disconnectSerial() {
+      try {
+        isConnected = false;
+        keepReading = false;
+        stopStreaming(true);
+        stopPhysics();
+        updateConnectionUI(false);
+        setServeButtonsEnabled(false);
+        downloadCsvButton.disabled = true;
+        clearLog();
+        switchTab('monitor');
+        if (reader) { await reader.cancel(); try { reader.releaseLock(); } catch (e) {} reader = undefined; }
+        if (port) { await port.close(); port = undefined; }
+      } catch (err) {
+        console.error('Disconnect error:', err);
+      }
+    }
+
+    // ========================= Init =========================
+    buildDataset1Grid();
+    buildDataset0Table();
+    buildCapabilityGrids();
+    wireDeviceSettings();
+    wireServeControls();
+    refreshCmdCountTable();
+    updateLiveView();
+
+    clearButton.addEventListener('click', clearLog);
+    downloadCsvButton.addEventListener('click', () => downloadCsv(`whill_emulator_log_${getJapanTimeStringForFilename()}.csv`));
+
+    if ('serial' in navigator) {
+      setServeButtonsEnabled(false);
+      downloadCsvButton.disabled = true;
+      initialConnectButton.addEventListener('click', async () => {
+        initialConnectButton.disabled = true;
+        try { await connectSerial(); } finally { initialConnectButton.disabled = false; }
+      });
+      disconnectButton.addEventListener('click', async () => {
+        disconnectButton.disabled = true;
+        try { await disconnectSerial(); } finally { disconnectButton.disabled = false; }
+      });
+    } else {
+      alert('Your browser is not supported. Please use Chrome or Edge.');
+    }
+  </script>
+</body></html>
