@@ -55,6 +55,8 @@ Each tool is a **single self-contained HTML file** with no external dependency. 
 
 Your data never leaves your machine: the tools communicate only between the browser and the WHILL over the serial port.
 
+> The Model CR2 tester has one optional add-on, `inspection.js`, which is not part of the published tool and is loaded only when the page is opened with `?addon=inspection`. To use it offline, keep that file next to `index.html`.
+
 ## Repository layout
 
 ```
@@ -64,13 +66,17 @@ docs/                       GitHub Pages root (Settings → Pages → main / doc
 ├── cr2/
 │   ├── index.html          Model CR2 landing page
 │   ├── spec/               Markdown source + exported index.html
-│   ├── tester/index.html   Single self-contained file
+│   ├── tester/
+│   │   ├── index.html      Single self-contained file
+│   │   └── inspection.js   Internal add-on, loaded only with ?addon=inspection
 │   └── emulator/index.html Single self-contained file
 └── omni/
     ├── index.html          Omni Platform landing page
     ├── spec/               Markdown source + exported index.html
     └── tester/index.html   Single self-contained file
 ```
+
+`tools/` holds development material that is committed but not served by GitHub Pages. See [`tools/cr2-inspection/`](tools/cr2-inspection/README.md) for the documentation and the regression tests of the Model CR2 tester's inspection add-on.
 
 Each product gets its own directory under `docs/`. A new product is added as a sibling of `cr2/` — **never as a branch**, because GitHub Pages publishes only one branch and a second branch would not be served at all.
 

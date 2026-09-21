@@ -4520,7 +4520,9 @@
     const requestedAddon = new URLSearchParams(location.search).get('addon');
     if (TESTER_ADDONS[requestedAddon]) {
       const addonScript = document.createElement('script');
-      addonScript.src = TESTER_ADDONS[requestedAddon];
+      // Cache-busted: an add-on is edited far more often than this file, and a stale
+      // copy served from the browser cache is impossible to spot from the page.
+      addonScript.src = `${TESTER_ADDONS[requestedAddon]}?t=${Date.now()}`;
       addonScript.onerror = () => console.error(`Add-on "${requestedAddon}" could not be loaded.`);
       document.head.appendChild(addonScript);
     }
