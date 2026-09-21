@@ -1479,6 +1479,14 @@
     let reader;
     let isConnected = false;
 
+    // Extension point for optional add-ons (see the loader at the end of this script).
+    // An add-on registers here instead of the tester having to know about it.
+    const testerAddons = {
+      onReceive: [],                 // called with every received chunk
+      onConnectionChange: [],        // called with true on connect, false on disconnect
+      suppressRawLog: () => false,   // an add-on can silence the per-chunk receive log
+    };
+
     // Joystick state
     let joystickActive = false;
     let joystickData = { x: 0, y: 0 };
@@ -1512,17 +1520,11 @@
       const tabButtons = document.querySelectorAll('.tab-button');
       tabButtons.forEach(button => button.classList.remove('active'));
 
-      // Show selected tab
-      if (tabName === 'main') {
-        document.getElementById('main-tab').classList.add('active');
-        document.querySelector('.tab-button[onclick="switchTab(\'main\')"]').classList.add('active');
-      } else if (tabName === 'speed-profile') {
-        document.getElementById('speed-profile-tab').classList.add('active');
-        document.querySelector('.tab-button[onclick="switchTab(\'speed-profile\')"]').classList.add('active');
-      } else if (tabName === 'custom-command') {
-        document.getElementById('custom-command-tab').classList.add('active');
-        document.querySelector('.tab-button[onclick="switchTab(\'custom-command\')"]').classList.add('active');
-      }
+      // Show selected tab (the id / onclick attribute follow the tab name by convention)
+      const selectedContent = document.getElementById(`${tabName}-tab`);
+      if (selectedContent) selectedContent.classList.add('active');
+      const selectedButton = document.querySelector(`.tab-button[onclick="switchTab('${tabName}')"]`);
+      if (selectedButton) selectedButton.classList.add('active');
 
       // Scroll the content area to top when switching tabs
       const shellContent = document.querySelector('.shell-content');
@@ -1560,6 +1562,7 @@
 
     // Data display function (displayed on all tabs)
     function displayData(data) {
+      if (testerAddons.suppressRawLog()) return;   // an add-on is writing its own log
       const timestamp = getJapanTimeString();
       const hexData = Array.from(data).map(byte => '0x' + byte.toString(16).toUpperCase().padStart(2, '0')).join(' ');
       const message = `[${timestamp}] Received: ${hexData}\n`;
@@ -2271,6 +2274,7 @@
               checkMotorStatusResponse(value);
               checkCapabilityResponse(value);
               checkSettingsResponse(value);
+              testerAddons.onReceive.forEach((handler) => handler(value));
             }
           }
         } catch (error) {
@@ -2322,6 +2326,8 @@
         // Enable CSV download button
         downloadCsvButton.disabled = false;
 
+        testerAddons.onConnectionChange.forEach((handler) => handler(true));
+
         keepReading = true;
 
         // Reset device information
@@ -2371,6 +2377,8 @@
         sendGetCapabilityButton.disabled = true;
         sendSetAutoPowerOffButton.disabled = true;
         sendRawCommandButton.disabled = true;
+
+        testerAddons.onConnectionChange.forEach((handler) => handler(false));
 
         // Reset device information
         updateDeviceInfo('unknown', '--.--');
@@ -2868,7 +2876,7 @@
 
           const completeTimestamp = getJapanTimeString();
           const message = `[${completeTimestamp}] Speed Mode ${speedMode} Profile Received Complete\n`;
-          appendLog(message);
+          if (!testerAddons.suppressRawLog()) appendLog(message);
 
           // Remove processed 14 bytes
           speedProfileBuffer = speedProfileBuffer.slice(14);
@@ -2902,7 +2910,7 @@
       motorStatusBuffer = newBuffer;
 
       // Debug: Output buffer contents to console
-      if (motorStatusBuffer.length > 0) {
+      if (motorStatusBuffer.length > 0 && !testerAddons.suppressRawLog()) {
         console.log('Motor status buffer:', Array.from(motorStatusBuffer).map(b => '0x' + b.toString(16).toUpperCase()).join(' '));
       }
 
@@ -2914,7 +2922,7 @@
             motorStatusBuffer[processedBytes + 1] === 0x1F && 
             motorStatusBuffer[processedBytes + 2] === 0x01) {
           
-          console.log('Motor status header detected:', processedBytes);
+          if (!testerAddons.suppressRawLog()) console.log('Motor status header detected:', processedBytes);
           
           // Confirm data length (from received log, 29 bytes of data after header)
           const expectedLength = 32; // Header 3 bytes + data 29 bytes
@@ -2949,7 +2957,7 @@
             const angleCounter = motorStatusBuffer[dataStart + 28];     // Angle detection counter (32nd byte: 0xAC)
 
             // Debug: Output received data to console
-            console.log('Motor status data received:', {
+            if (!testerAddons.suppressRawLog()) console.log('Motor status data received:', {
               battery, buzzer, deviceLock, joystickPause, maxSpeedLevel, speedLevel, autoPowerOff,
               tripDistance, joystickForward, joystickTurn, batteryLevel,
               batteryCurrent, motorAngleRight, motorAngleLeft, motorSpeedRight, motorSpeedLeft,
@@ -2966,7 +2974,7 @@
 
             const completeTimestamp = getJapanTimeString();
             const message = `[${completeTimestamp}] Motor Status Received Complete\n`;
-            appendLog(message);
+            if (!testerAddons.suppressRawLog()) appendLog(message);
 
             // Remove processed 32 bytes
             processedBytes += expectedLength;
@@ -4503,7 +4511,19 @@
 
     // Joystick initialization
     initJoystick();
-  </script>
 
+    // ---- Optional add-ons ----------------------------------------------------
+    // Loaded only when the page is opened with ?addon=<name>, so the published
+    // tester stays a single self-contained file with no external dependency.
+    // See tools/cr2-inspection/README.md.
+    const TESTER_ADDONS = { inspection: 'inspection.js' };
+    const requestedAddon = new URLSearchParams(location.search).get('addon');
+    if (TESTER_ADDONS[requestedAddon]) {
+      const addonScript = document.createElement('script');
+      addonScript.src = TESTER_ADDONS[requestedAddon];
+      addonScript.onerror = () => console.error(`Add-on "${requestedAddon}" could not be loaded.`);
+      document.head.appendChild(addonScript);
+    }
+  </script>
 
 </body></html>
