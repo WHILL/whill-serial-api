@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="MRP Serial Tester">
+  <title>MRP Serial Tester</title>
+  <rect x="0" y="0" width="512" height="512" rx="96" ry="96" fill="#0075B8"/>
+  <rect x="75.845" y="86" width="26" height="137" fill="#FFFFFF"/>
+  <rect x="179.995" y="86" width="26" height="137" fill="#FFFFFF"/>
+  <path d="M75.845 86 L101.845 86 L153.92 195.6 L127.92 195.6 Z" fill="#FFFFFF"/>
+  <path d="M179.995 86 L205.995 86 L153.92 195.6 L127.92 195.6 Z" fill="#FFFFFF"/>
+  <circle cx="274.495" cy="127.1" r="28.1" fill="none" stroke="#FFFFFF" stroke-width="26"/>
+  <rect x="217.695" y="84" width="56.8" height="86.2" fill="#0075B8"/>
+  <rect x="219.695" y="86" width="54.8" height="26" fill="#FFFFFF"/>
+  <rect x="219.695" y="142.2" width="54.8" height="26" fill="#FFFFFF"/>
+  <rect x="219.695" y="86" width="26" height="137" fill="#FFFFFF"/>
+  <path d="M260.795 142.2 L286.795 142.2 L326.555 223 L300.555 223 Z" fill="#FFFFFF"/>
+  <circle cx="395.055" cy="127.1" r="28.1" fill="none" stroke="#FFFFFF" stroke-width="26"/>
+  <rect x="338.255" y="84" width="56.8" height="86.2" fill="#0075B8"/>
+  <rect x="340.255" y="86" width="54.8" height="26" fill="#FFFFFF"/>
+  <rect x="340.255" y="142.2" width="54.8" height="26" fill="#FFFFFF"/>
+  <rect x="340.255" y="86" width="26" height="137" fill="#FFFFFF"/>
+  <path d="M86 278 L426 278 L402 426 L110 426 Z" fill="#FFFFFF"/>
+  <circle cx="136" cy="322" r="22" fill="#0075B8"/>
+  <circle cx="196" cy="322" r="22" fill="#0075B8"/>
+  <circle cx="256" cy="322" r="22" fill="#0075B8"/>
+  <circle cx="316" cy="322" r="22" fill="#0075B8"/>
+  <circle cx="376" cy="322" r="22" fill="#0075B8"/>
+  <circle cx="166" cy="382" r="22" fill="#0075B8"/>
+  <circle cx="226" cy="382" r="22" fill="#0075B8"/>
+  <circle cx="286" cy="382" r="22" fill="#0075B8"/>
+  <circle cx="346" cy="382" r="22" fill="#0075B8"/>
+</svg>

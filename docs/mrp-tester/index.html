@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Internal tester app for the WHILL Mobile Robot Platform - Model CR2 and Omni Platform testers in one installable app">
+  <meta name="author" content="WHILL CO.,LTD.">
+  <!--
+    Not linked from anywhere on the published site, and kept out of search
+    results. Deliberately absent from robots.txt too: a Disallow line would
+    publish the very path it is meant to keep quiet.
+  -->
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0075B8">
+  <title>MRP Serial Tester</title>
+  <style>
+    :root {
+      --whill-blue: #0075B8;
+      --whill-blue-dark: #005a8f;
+      --text: #333333;
+      --border: #d9dee5;
+      --bg: #f5f7f9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background-color: var(--bg);
+      color: var(--text);
+      font-size: 12pt;
+      line-height: 1.7;
+      /* WHILL Web UI guideline: Latin = DIN Pro, Japanese = Koburina Gothic (with graceful fallbacks) */
+      font-family: 'DIN Pro', 'DINPro', 'Koburina Gothic W3', 'Koburina Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', 'Meiryo', Arial, sans-serif;
+    }
+
+    .wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 40px 20px 60px;
+    }
+
+    h1 {
+      font-size: 13pt;
+      font-weight: normal;
+      color: var(--whill-blue);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+      margin: 0 0 22px;
+    }
+
+    .products {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      /* Room below each card for the shadow that gives it its depth. */
+      gap: 24px 20px;
+    }
+
+    /*
+     * The whole card is the button. Flat WHILL Blue with a darker bottom edge
+     * and a soft drop shadow - the depth comes from the shadow, not from a
+     * gradient, so the only colours in play are WHILL Blue and the darker tint
+     * the rest of the site already uses for hover states.
+     */
+    .product {
+      display: block;
+      background-color: var(--whill-blue);
+      color: #ffffff;
+      text-decoration: none;
+      border-radius: 8px;
+      padding: 26px 28px;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        0 3px 0 var(--whill-blue-dark),
+        0 5px 12px rgba(0, 0, 0, 0.16);
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+    }
+
+    /*
+     * Hover lifts the card but leaves the fill alone. A lighter blue would drop
+     * white-on-blue below 4.5:1 for the small second line, and a darker one is
+     * needed for :active - so the depth does the talking.
+     */
+    .product:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.22),
+        0 5px 0 var(--whill-blue-dark),
+        0 9px 18px rgba(0, 0, 0, 0.20);
+    }
+
+    /* Pressed: the card sinks onto its own edge. */
+    .product:active {
+      background-color: var(--whill-blue-dark);
+      transform: translateY(3px);
+      box-shadow:
+        inset 0 2px 4px rgba(0, 0, 0, 0.20),
+        0 0 0 var(--whill-blue-dark),
+        0 1px 3px rgba(0, 0, 0, 0.18);
+    }
+
+    .product:focus-visible {
+      outline: 3px solid var(--whill-blue-dark);
+      outline-offset: 3px;
+    }
+
+    .product h2 {
+      font-size: 15pt;
+      font-weight: bold;
+      margin: 0 0 4px;
+    }
+
+    .product p.covers {
+      margin: 0;
+      font-size: 10.5pt;
+      line-height: 1.6;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .product { transition: none; }
+      .product:hover, .product:active { transform: none; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <h1>Select a product</h1>
+
+    <div class="products">
+
+      <a class="product" href="../cr2/tester/?addon=inspection">
+        <h2>Model CR2</h2>
+        <p class="covers">Model CR2 &middot; Wheeled Robot Base &middot; Electrical System Kit</p>
+      </a>
+
+      <a class="product" href="../omni/tester/">
+        <h2>Omni Platform</h2>
+        <p class="covers">Omni Platform (4WD)</p>
+      </a>
+
+    </div>
+  </div>
+
+  <script>
+    /*
+     * The service worker sits at the site root, one directory up, because it has
+     * to control ../cr2/tester/ and ../omni/tester/ as well as this page, and a
+     * worker cannot claim a scope above its own path. See ../sw.js.
+     *
+     * It precaches both testers, so they keep opening on an isolated network.
+     * That happens silently: the page reports nothing, so check Application ->
+     * Cache Storage in DevTools if you need to confirm it before going offline.
+     */
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../sw.js', { scope: '../' })
+        .catch((error) => console.error('Offline use unavailable:', error.message));
+    }
+  </script>
+
+</body></html>
