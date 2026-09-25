@@ -508,6 +508,14 @@
       transform: translate(-50%, -50%) scale(1.1);
     }
 
+    /* While dragging, the knob has to sit where the pointer is. With the
+       transition left on, every pointer event restarts a 100 ms animation of
+       left/top - both layout properties - so the browser re-lays-out the knob
+       continuously and the knob lags the cursor. */
+    .joystick-knob.dragging {
+      transition: none;
+    }
+
     .joystick-center {
       position: absolute;
       width: 8px;
@@ -1491,6 +1499,19 @@
     let joystickActive = false;
     let joystickData = { x: 0, y: 0 };
     let joystickInterval = null;
+
+    // Repeat cycle of SET_JOYSTICK / SET_VELOCITY while the control is held
+    // down. A command stays effective for 200 ms, so any value well inside that
+    // works; this is not a choice an operator gains anything from making.
+    const JOYSTICK_SEND_INTERVAL_MS = 60;
+
+    // The repeated frames would bury the rest of the log, so only a value
+    // change reaches it. The GRAB and RELEASE lines always do, and RELEASE
+    // reports how many frames went out in total. These counters carry that.
+    let joystickSendCount = 0;
+    let joystickLoggedCount = 0;
+    let joystickHoldStartedAt = 0;
+    let joystickLastLoggedValue = null;
 
     // Speed profile state
     let speedProfiles = [];
@@ -2509,6 +2530,13 @@
       let startX, startY;
       let centerX, centerY;
       let radius;
+      // Taken once per drag. Calling getBoundingClientRect() per pointer event
+      // forces a synchronous layout, and a high-polling-rate mouse fires those
+      // events far more often than the screen refreshes.
+      let boxLeft = 0, boxTop = 0;
+      // Latest pointer position, applied once per animation frame.
+      let pendingX = 0, pendingY = 0;
+      let moveFrame = 0;
 
       function updateKnobPosition(x, y) {
         const dx = x - centerX;
@@ -2530,9 +2558,8 @@
         const normalizedY = (finalY - centerY) / radius;
 
         // Convert to relative coordinates based on joystick element
-        const joystickRect = joystick.getBoundingClientRect();
-        const relativeX = finalX - joystickRect.left;
-        const relativeY = finalY - joystickRect.top;
+        const relativeX = finalX - boxLeft;
+        const relativeY = finalY - boxTop;
 
         knob.style.left = relativeX + 'px';
         knob.style.top = relativeY + 'px';
@@ -2548,9 +2575,18 @@
 
       function getJoystickCenter() {
         const rect = joystick.getBoundingClientRect();
+        boxLeft = rect.left;
+        boxTop = rect.top;
         centerX = rect.left + rect.width / 2;
         centerY = rect.top + rect.height / 2;
         radius = rect.width / 2 - 20; // Consider knob radius
+      }
+
+      function cancelPendingMove() {
+        if (moveFrame) {
+          cancelAnimationFrame(moveFrame);
+          moveFrame = 0;
+        }
       }
 
       function handleStart(e) {
@@ -2559,11 +2595,13 @@
         joystickActive = true;
         getJoystickCenter();
 
+        knob.classList.add('dragging');
+
         const touch = e.type === 'touchstart' ? e.touches[0] : e;
         startX = touch.clientX;
         startY = touch.clientY;
 
-        // Start sending joystick data at 100ms intervals
+        // Start repeated sending at the fixed interval
         startJoystickInterval();
       }
 
@@ -2571,8 +2609,18 @@
         if (!isActive) return;
         e.preventDefault();
 
+        // Keep only the newest position and redraw once per frame. The value
+        // that gets sent is read from joystickData by the send timer, so
+        // coalescing here costs no resolution.
         const touch = e.type === 'touchmove' ? e.touches[0] : e;
-        updateKnobPosition(touch.clientX, touch.clientY);
+        pendingX = touch.clientX;
+        pendingY = touch.clientY;
+        if (moveFrame) return;
+        moveFrame = requestAnimationFrame(() => {
+          moveFrame = 0;
+          if (!isActive) return;
+          updateKnobPosition(pendingX, pendingY);
+        });
       }
 
       function handleEnd(e) {
@@ -2580,6 +2628,8 @@
         e.preventDefault();
         isActive = false;
         joystickActive = false;
+        cancelPendingMove();
+        knob.classList.remove('dragging');
 
         // Return knob to center
         knob.style.left = '50%';
@@ -2590,12 +2640,14 @@
         joystickData = { x: 0, y: 0 };
         joystickValues.textContent = 'X: 0, Y: 0';
 
-        // Stop 100ms interval sending
+        // Stop repeated sending
         stopJoystickInterval();
 
-        // Send final data
+        // Send the final neutral frame, which also writes the closing log line
         if (port && port.writable) {
-          sendJoystickData();
+          sendJoystickData('release');
+        } else {
+          logJoystickHoldEnd(null);
         }
       }
 
@@ -2610,19 +2662,26 @@
       document.addEventListener('touchend', handleEnd);
     }
 
-    // Start 100ms interval sending
+    // Start repeated sending
     function startJoystickInterval() {
       if (joystickInterval) {
         clearInterval(joystickInterval);
       }
+      // Reset the per-hold counters and write the opening line
+      joystickSendCount = 0;
+      joystickLoggedCount = 0;
+      joystickLastLoggedValue = null;
+      joystickHoldStartedAt = Date.now();
+      appendLog(`[${getJapanTimeString()}] Joystick GRAB (interval ${JOYSTICK_SEND_INTERVAL_MS} ms)\n`);
+
       joystickInterval = setInterval(() => {
         if (joystickActive && port && port.writable) {
-          sendJoystickData();
+          sendJoystickData('hold');
         }
-      }, 100);
+      }, JOYSTICK_SEND_INTERVAL_MS);
     }
 
-    // Stop 100ms interval sending
+    // Stop repeated sending
     function stopJoystickInterval() {
       if (joystickInterval) {
         clearInterval(joystickInterval);
@@ -2630,9 +2689,23 @@
       }
     }
 
+    // Closing line of one hold: what was sent, and how much was kept out of the log
+    function logJoystickHoldEnd(lastHexData) {
+      const seconds = joystickHoldStartedAt ? ((Date.now() - joystickHoldStartedAt) / 1000).toFixed(1) : '0.0';
+      const skipped = joystickSendCount - joystickLoggedCount;
+      const suppressed = skipped > 0 ? `, ${skipped} not logged` : '';
+      const last = lastHexData ? `: ${lastHexData}` : '';
+      appendLog(`[${getJapanTimeString()}] Joystick RELEASE${last} (${joystickSendCount} frames / ${seconds} s${suppressed})\n`);
+      joystickHoldStartedAt = 0;
+    }
+
     // Joystick data send function
-    async function sendJoystickData() {
-      if (!port || !port.writable) return;
+    // phase: 'hold' for the repeated frames, 'release' for the final neutral frame
+    async function sendJoystickData(phase = 'hold') {
+      if (!port || !port.writable) {
+        if (phase === 'release') logJoystickHoldEnd(null);
+        return;
+      }
 
       try {
         // Convert joystick data to byte array
@@ -2661,13 +2734,28 @@
         await writer.write(joystickCommand);
         writer.releaseLock();
 
-        const timestamp = getJapanTimeString();
         const hexData = Array.from(joystickCommand).map(byte => '0x' + byte.toString(16).toUpperCase().padStart(2, '0')).join(' ');
-        const message = `[${timestamp}] Send Joystick: ${hexData}\n`;
-        appendLog(message);
+        joystickSendCount++;
+
+        if (phase === 'release') {
+          // One closing line instead of the frame itself
+          logJoystickHoldEnd(hexData);
+          joystickLastLoggedValue = null;
+          return;
+        }
+
+        // Only a value change reaches the log
+        const changed = !joystickLastLoggedValue ||
+                        joystickLastLoggedValue.y !== yValue || joystickLastLoggedValue.x !== xValue;
+        if (changed) {
+          joystickLoggedCount++;
+          joystickLastLoggedValue = { y: yValue, x: xValue };
+          appendLog(`[${getJapanTimeString()}] Send Joystick: ${hexData}\n`);
+        }
 
       } catch (error) {
         console.error('Joystick Send Error:', error);
+        if (phase === 'release') logJoystickHoldEnd(null);
       }
     }
 
@@ -3732,81 +3820,106 @@
     // SET_JOYSTICK continuous send function
     let joystickContinuousInterval = null;
     let isJoystickContinuousSending = false;
+    let joystickContinuousCount = 0;
+    let joystickContinuousLoggedCount = 0;
+    let joystickContinuousStartedAt = 0;
+    let joystickContinuousLastLogged = null;
+
+    // One repeat of SET_JOYSTICK, driven by the interval timer while the button is held
+    async function joystickContinuousTick() {
+      if (!port || !port.writable) {
+        stopJoystickContinuousSending();
+        return;
+      }
+
+      try {
+        const bodyPriority = parseInt(bodyPriorityInput.value) || 0;
+        const forwardBackward = parseInt(forwardBackwardInput.value) || 0;
+        const leftRight = parseInt(leftRightInput.value) || 0;
+
+        // Input value validation
+        if (bodyPriority < 0 || bodyPriority > 255) {
+          stopJoystickContinuousSending();
+          alert('Please enter Body Priority between 0 and 255.');
+          return;
+        }
+        if (forwardBackward < -128 || forwardBackward > 127) {
+          stopJoystickContinuousSending();
+          alert('Please enter Forward/Backward Direction between -128 and 127.');
+          return;
+        }
+        if (leftRight < -128 || leftRight > 127) {
+          stopJoystickContinuousSending();
+          alert('Please enter Left/Right Turn Direction between -128 and 127.');
+          return;
+        }
+
+        // Build SET_JOYSTICK command
+        const header = [0xAF, 0x05, 0x03, bodyPriority, forwardBackward, leftRight];
+
+        let checksum = 0;
+        header.forEach(byte => {
+          checksum ^= byte;
+        });
+
+        const setJoystickCommand = new Uint8Array([...header, checksum]);
+        const writer = port.writable.getWriter();
+        await writer.write(setJoystickCommand);
+        writer.releaseLock();
+
+        const hexData = Array.from(setJoystickCommand).map(byte => '0x' + byte.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+        joystickContinuousCount++;
+
+        // Only a value change reaches the log
+        if (joystickContinuousLastLogged !== hexData) {
+          joystickContinuousLoggedCount++;
+          joystickContinuousLastLogged = hexData;
+          appendLog(`[${getJapanTimeString()}] Send SET_JOYSTICK (Continuous): ${hexData}\n`);
+        }
+
+      } catch (error) {
+        console.error('Send SET_JOYSTICK (Continuous) Error:', error);
+        stopJoystickContinuousSending();
+      }
+    }
 
     // Start continuous send
     function startJoystickContinuousSending() {
       if (isJoystickContinuousSending) return;
-      
+
       isJoystickContinuousSending = true;
       sendSetJoystickContinuousButton.classList.add('sending');
       sendSetJoystickContinuousButton.textContent = 'Sending... SET_JOYSTICK (Continuous)';
-      
-      // Send SET_JOYSTICK command at 100ms intervals
-      joystickContinuousInterval = setInterval(async () => {
-        if (port && port.writable) {
-          try {
-            const bodyPriority = parseInt(bodyPriorityInput.value) || 0;
-            const forwardBackward = parseInt(forwardBackwardInput.value) || 0;
-            const leftRight = parseInt(leftRightInput.value) || 0;
-            
-            // Input value validation
-            if (bodyPriority < 0 || bodyPriority > 255) {
-              stopJoystickContinuousSending();
-              alert('Please enter Body Priority between 0 and 255.');
-              return;
-            }
-            if (forwardBackward < -128 || forwardBackward > 127) {
-              stopJoystickContinuousSending();
-              alert('Please enter Forward/Backward Direction between -128 and 127.');
-              return;
-            }
-            if (leftRight < -128 || leftRight > 127) {
-              stopJoystickContinuousSending();
-              alert('Please enter Left/Right Turn Direction between -128 and 127.');
-              return;
-            }
 
-            // Build SET_JOYSTICK command
-            const header = [0xAF, 0x05, 0x03, bodyPriority, forwardBackward, leftRight];
-            
-            let checksum = 0;
-            header.forEach(byte => {
-              checksum ^= byte;
-            });
+      joystickContinuousCount = 0;
+      joystickContinuousLoggedCount = 0;
+      joystickContinuousLastLogged = null;
+      joystickContinuousStartedAt = Date.now();
+      appendLog(`[${getJapanTimeString()}] SET_JOYSTICK (Continuous) START (interval ${JOYSTICK_SEND_INTERVAL_MS} ms)\n`);
 
-            const setJoystickCommand = new Uint8Array([...header, checksum]);
-            
-            const writer = port.writable.getWriter();
-            await writer.write(setJoystickCommand);
-            writer.releaseLock();
-
-            const timestamp = getJapanTimeString();
-            const hexData = Array.from(setJoystickCommand).map(byte => '0x' + byte.toString(16).toUpperCase().padStart(2, '0')).join(' ');
-            const message = `[${timestamp}] Send SET_JOYSTICK (Continuous): ${hexData}\n`;
-            appendLog(message);
-
-          } catch (error) {
-            console.error('Send SET_JOYSTICK (Continuous) Error:', error);
-            stopJoystickContinuousSending();
-          }
-        } else {
-          stopJoystickContinuousSending();
-        }
-      }, 100);
+      // Send SET_JOYSTICK command at the fixed interval
+      joystickContinuousInterval = setInterval(joystickContinuousTick, JOYSTICK_SEND_INTERVAL_MS);
     }
 
     // Stop continuous send
     function stopJoystickContinuousSending() {
       if (!isJoystickContinuousSending) return;
-      
+
       isJoystickContinuousSending = false;
       sendSetJoystickContinuousButton.classList.remove('sending');
       sendSetJoystickContinuousButton.textContent = 'Send SET_JOYSTICK (Continuous)';
-      
+
       if (joystickContinuousInterval) {
         clearInterval(joystickContinuousInterval);
         joystickContinuousInterval = null;
       }
+
+      const seconds = joystickContinuousStartedAt
+        ? ((Date.now() - joystickContinuousStartedAt) / 1000).toFixed(1) : '0.0';
+      const skipped = joystickContinuousCount - joystickContinuousLoggedCount;
+      const suppressed = skipped > 0 ? `, ${skipped} not logged` : '';
+      appendLog(`[${getJapanTimeString()}] SET_JOYSTICK (Continuous) STOP (${joystickContinuousCount} frames / ${seconds} s${suppressed})\n`);
+      joystickContinuousStartedAt = 0;
     }
 
     // Continuous send button event listener
@@ -3984,86 +4097,111 @@
     // SET_VELOCITY continuous send function
     let velocityContinuousInterval = null;
     let isVelocityContinuousSending = false;
+    let velocityContinuousCount = 0;
+    let velocityContinuousLoggedCount = 0;
+    let velocityContinuousStartedAt = 0;
+    let velocityContinuousLastLogged = null;
+
+    // One repeat of SET_VELOCITY, driven by the interval timer while the button is held
+    async function velocityContinuousTick() {
+      if (!port || !port.writable) {
+        stopVelocityContinuousSending();
+        return;
+      }
+
+      try {
+        const bodyPriority = parseInt(velocityBodyPriorityInput.value) || 0;
+        const forwardBackwardVelocity = parseInt(forwardBackwardVelocityInput.value) || 0;
+        const leftRightVelocity = parseInt(leftRightVelocityInput.value) || 0;
+
+        // Input value validation
+        if (bodyPriority < 0 || bodyPriority > 255) {
+          stopVelocityContinuousSending();
+          alert('Please enter Body Priority between 0 and 255.');
+          return;
+        }
+        if (forwardBackwardVelocity < -32768 || forwardBackwardVelocity > 32767) {
+          stopVelocityContinuousSending();
+          alert('Forward/Backward Directionspeed must be between -32768 and 32767.');
+          return;
+        }
+        if (leftRightVelocity < -32768 || leftRightVelocity > 32767) {
+          stopVelocityContinuousSending();
+          alert('Left/Right Turn Directionspeed must be between -32768 and 32767.');
+          return;
+        }
+
+        // Build SET_VELOCITY command
+        const header = [0xAF, 0x07, 0x08, bodyPriority];
+        const forwardBackwardHigh = (forwardBackwardVelocity >> 8) & 0xFF;
+        const forwardBackwardLow = forwardBackwardVelocity & 0xFF;
+        const leftRightHigh = (leftRightVelocity >> 8) & 0xFF;
+        const leftRightLow = leftRightVelocity & 0xFF;
+        const data = [forwardBackwardHigh, forwardBackwardLow, leftRightHigh, leftRightLow];
+
+        let checksum = 0;
+        [...header, ...data].forEach(byte => {
+          checksum ^= byte;
+        });
+
+        const setVelocityCommand = new Uint8Array([...header, ...data, checksum]);
+        const writer = port.writable.getWriter();
+        await writer.write(setVelocityCommand);
+        writer.releaseLock();
+
+        const hexData = Array.from(setVelocityCommand).map(byte => '0x' + byte.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+        velocityContinuousCount++;
+
+        // Only a value change reaches the log
+        if (velocityContinuousLastLogged !== hexData) {
+          velocityContinuousLoggedCount++;
+          velocityContinuousLastLogged = hexData;
+          appendLog(`[${getJapanTimeString()}] Send SET_VELOCITY (Continuous): ${hexData}\n`);
+        }
+
+      } catch (error) {
+        console.error('Send SET_VELOCITY (Continuous) Error:', error);
+        stopVelocityContinuousSending();
+      }
+    }
 
     // Start continuous send
     function startVelocityContinuousSending() {
       if (isVelocityContinuousSending) return;
-      
+
       isVelocityContinuousSending = true;
       sendSetVelocityContinuousButton.classList.add('sending');
       sendSetVelocityContinuousButton.textContent = 'Sending... SET_VELOCITY (Continuous)';
-      
-      // Send SET_VELOCITY command at 100ms intervals
-      velocityContinuousInterval = setInterval(async () => {
-        if (port && port.writable) {
-          try {
-            const bodyPriority = parseInt(velocityBodyPriorityInput.value) || 0;
-            const forwardBackwardVelocity = parseInt(forwardBackwardVelocityInput.value) || 0;
-            const leftRightVelocity = parseInt(leftRightVelocityInput.value) || 0;
-            
-            // Input value validation
-            if (bodyPriority < 0 || bodyPriority > 255) {
-              stopVelocityContinuousSending();
-              alert('Please enter Body Priority between 0 and 255.');
-              return;
-            }
-            if (forwardBackwardVelocity < -32768 || forwardBackwardVelocity > 32767) {
-              stopVelocityContinuousSending();
-              alert('Forward/Backward Directionspeed must be between -32768 and 32767.');
-              return;
-            }
-            if (leftRightVelocity < -32768 || leftRightVelocity > 32767) {
-              stopVelocityContinuousSending();
-              alert('Left/Right Turn Directionspeed must be between -32768 and 32767.');
-              return;
-            }
 
-            // Build SET_VELOCITY command
-            const header = [0xAF, 0x07, 0x08, bodyPriority];
-            const forwardBackwardHigh = (forwardBackwardVelocity >> 8) & 0xFF;
-            const forwardBackwardLow = forwardBackwardVelocity & 0xFF;
-            const leftRightHigh = (leftRightVelocity >> 8) & 0xFF;
-            const leftRightLow = leftRightVelocity & 0xFF;
-            const data = [forwardBackwardHigh, forwardBackwardLow, leftRightHigh, leftRightLow];
-            
-            let checksum = 0;
-            [...header, ...data].forEach(byte => {
-              checksum ^= byte;
-            });
+      velocityContinuousCount = 0;
+      velocityContinuousLoggedCount = 0;
+      velocityContinuousLastLogged = null;
+      velocityContinuousStartedAt = Date.now();
+      appendLog(`[${getJapanTimeString()}] SET_VELOCITY (Continuous) START (interval ${JOYSTICK_SEND_INTERVAL_MS} ms)\n`);
 
-            const setVelocityCommand = new Uint8Array([...header, ...data, checksum]);
-            
-            const writer = port.writable.getWriter();
-            await writer.write(setVelocityCommand);
-            writer.releaseLock();
-
-            const timestamp = getJapanTimeString();
-            const hexData = Array.from(setVelocityCommand).map(byte => '0x' + byte.toString(16).toUpperCase().padStart(2, '0')).join(' ');
-            const message = `[${timestamp}] Send SET_VELOCITY (Continuous): ${hexData}\n`;
-            appendLog(message);
-
-          } catch (error) {
-            console.error('Send SET_VELOCITY (Continuous) Error:', error);
-            stopVelocityContinuousSending();
-          }
-        } else {
-          stopVelocityContinuousSending();
-        }
-      }, 100);
+      // Send SET_VELOCITY command at the fixed interval
+      velocityContinuousInterval = setInterval(velocityContinuousTick, JOYSTICK_SEND_INTERVAL_MS);
     }
 
     // Stop continuous send
     function stopVelocityContinuousSending() {
       if (!isVelocityContinuousSending) return;
-      
+
       isVelocityContinuousSending = false;
       sendSetVelocityContinuousButton.classList.remove('sending');
       sendSetVelocityContinuousButton.textContent = 'Send SET_VELOCITY (Continuous)';
-      
+
       if (velocityContinuousInterval) {
         clearInterval(velocityContinuousInterval);
         velocityContinuousInterval = null;
       }
+
+      const seconds = velocityContinuousStartedAt
+        ? ((Date.now() - velocityContinuousStartedAt) / 1000).toFixed(1) : '0.0';
+      const skipped = velocityContinuousCount - velocityContinuousLoggedCount;
+      const suppressed = skipped > 0 ? `, ${skipped} not logged` : '';
+      appendLog(`[${getJapanTimeString()}] SET_VELOCITY (Continuous) STOP (${velocityContinuousCount} frames / ${seconds} s${suppressed})\n`);
+      velocityContinuousStartedAt = 0;
     }
 
     // Continuous send button event listener
