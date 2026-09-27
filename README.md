@@ -11,7 +11,8 @@
 </p>
 
 <p align="center">
-  <a href="https://whill.github.io/whill-serial-api/"><b>whill.github.io/whill-serial-api</b></a>
+  <a href="https://whill.github.io/whill-serial-api/"><b>whill.github.io/whill-serial-api</b></a> ·
+  <a href="https://github.com/WHILL/mrp-support/blob/main/README.en.md"><b>Technical Support</b></a>
 </p>
 
 ---
@@ -89,6 +90,12 @@ python -m http.server 8000 --directory docs
 ```
 
 Then open <http://localhost:8000/>. `localhost` counts as a secure origin, so the Web Serial API works and the tools can be tested against real hardware before merging.
+
+## Support
+
+Technical questions about the WHILL Serial API and the tools are handled by **[WHILL MRP Technical Support](https://github.com/WHILL/mrp-support/blob/main/README.en.md)** — please open an issue there. This repository does not accept issues.
+
+Repairs and parts purchases are outside the scope of technical support. Contact **mrp.contact@whill.inc**.
 
 ## License
 
