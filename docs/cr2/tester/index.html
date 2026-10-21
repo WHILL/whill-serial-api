@@ -681,41 +681,6 @@
       opacity: 1;
     }
 
-    /* Model Selection Radio Buttons */
-    .model-selection {
-      position: absolute;
-      top: 2px;
-      right: 230px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      align-items: flex-start;
-      justify-content: center;
-      background-color: rgba(255, 255, 255, 0.95);
-      border-radius: 5px;
-      padding: 6px 10px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      z-index: 999;
-      height: 50px;
-      box-sizing: border-box;
-    }
-
-    .model-selection label {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 9pt;
-      color: #0075B8;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    .model-selection input[type="radio"] {
-      cursor: pointer;
-      width: 14px;
-      height: 14px;
-    }
-
     /* ===== Dashboard App-Shell Layout (fixed status + fixed log) ===== */
     html, body { height: 100%; }
     body { margin: 0; }
@@ -791,14 +756,12 @@
     .app-shell.connected #pre-connection-area { display: none; }
 
     /* Neutralize the old absolute positioning now that these live in the header flow,
-       and give all three controls the same height as the Disconnect button (50px). */
+       and give both controls the same height as the Disconnect button (50px). */
     .conn-controls .disconnect-button,
-    .conn-controls #device-info-display,
-    .conn-controls .model-selection {
+    .conn-controls #device-info-display {
       position: static; top: auto; right: auto; left: auto;
       height: 50px; box-sizing: border-box;
     }
-    .conn-controls .model-selection { flex-direction: row; align-items: center; gap: 12px; }
     .conn-controls #device-info-display { width: auto; padding: 4px 10px; cursor: default; }
     /* No hover darkening on the version box (its transparent-blue hover disappeared on the blue title bar) */
     .conn-controls #device-info-display:hover,
@@ -863,10 +826,6 @@
             <div class="version-label">Version:</div>
             <div class="version-value">--.--</div>
           </div>
-        </div>
-        <div class="model-selection">
-          <label><input type="radio" name="device-model" value="CR2" id="model-cr2-radio" checked=""> Model CR2</label>
-          <label><input type="radio" name="device-model" value="CR" id="model-cr-radio"> Model CR</label>
         </div>
       </div>
     </header>
@@ -1522,7 +1481,6 @@
     let speedProfileBuffer = new Uint8Array(0); // Speed profile dedicated buffer
     let speedProfilesRetrieved = false; // Speed profile retrieval completion flag
     let motorStatusBuffer = new Uint8Array(0); // Motor status dedicated buffer
-    let deviceModel = 'CR2'; // For storing device model (initial value: CR2)
 
     // UI display switching function
     function updateConnectionUI(connected) {
@@ -1613,9 +1571,9 @@
       const csvRows = ['Timestamp,Type,Data'];
       
       lines.forEach(line => {
-        // Skip version response parse content (Model CR2, Version: X.XX)
+        // Skip version response parse content (Version: X.XX)
         const afterBracket = line.substring(line.indexOf(']') + 1).trim();
-        if (afterBracket === 'Model CR2' || afterBracket.startsWith('Version: ')) {
+        if (afterBracket.startsWith('Version: ')) {
           return;
         }
         
@@ -1947,7 +1905,7 @@
         if (!waitingForVersionResponse) return;
         const timestamp = getJapanTimeString();
         appendLog(`[${timestamp}] Device Information Retrieval Failed\n`);
-        updateDeviceInfo('unknown', '--.--');
+        updateDeviceInfo('--.--');
         waitingForVersionResponse = false;
       }, 1500);
     }
@@ -1960,27 +1918,29 @@
       newBuffer.set(data, receivedBuffer.length);
       receivedBuffer = newBuffer;
 
-      // Check 4-byte response pattern: {0xAF, 0x02, 0x52, 0xFF}
-      if (receivedBuffer.length >= 4) {
-        if (receivedBuffer[0] === 0xAF &&
-          receivedBuffer[1] === 0x02 &&
-          receivedBuffer[2] === 0x52 &&
-          receivedBuffer[3] === 0xFF) {
+      // Search for the 4-byte response pattern {0xAF, 0x02, 0x52, 0xFF} anywhere in the
+      // buffer: it can follow other bytes in the same read, or be split across reads.
+      let keepFrom = Math.max(0, receivedBuffer.length - 3);  // a split pattern needs at most 3 bytes
+      for (let i = 0; i + 4 <= receivedBuffer.length; i++) {
+        if (receivedBuffer[i] === 0xAF &&
+          receivedBuffer[i + 1] === 0x02 &&
+          receivedBuffer[i + 2] === 0x52 &&
+          receivedBuffer[i + 3] === 0xFF) {
           // Process when Power ON response is received
           const timestamp = getJapanTimeString();
           const message = `[${timestamp}] Power ON Response Received\n`;
           appendLog(message);
+          i += 3;
+          keepFrom = Math.max(keepFrom, i + 1);
         }
-
-        // Clear buffer (remove processed data)
-        receivedBuffer = new Uint8Array(0);
       }
+      receivedBuffer = receivedBuffer.slice(keepFrom);
     }
 
     // Device information update function
-    function updateDeviceInfo(model, version) {
+    function updateDeviceInfo(version) {
       // Update device information display in top right
-      updateDeviceInfoDisplay(model, version);
+      updateDeviceInfoDisplay(version);
     }
 
     // A valid firmware version looks like "8x.xx" (major 80-89, two-digit minor).
@@ -1990,7 +1950,7 @@
     }
 
     // Device information display update function (top right)
-    function updateDeviceInfoDisplay(model, version) {
+    function updateDeviceInfoDisplay(version) {
       const deviceInfoDisplay = document.getElementById('device-info-display');
       const versionLabelElement = deviceInfoDisplay.querySelector('.version-label');
       const versionValueElement = deviceInfoDisplay.querySelector('.version-value');
@@ -2003,58 +1963,50 @@
       deviceInfoDisplay.style.color = '#0075B8';
     }
 
-    // Model selection radio button event handlers
-    const modelCrRadio = document.getElementById('model-cr-radio');
-    const modelCr2Radio = document.getElementById('model-cr2-radio');
-
-    modelCrRadio.addEventListener('change', () => {
-      if (modelCrRadio.checked) {
-        deviceModel = 'CR';
-        // Always set version to --.-- when CR model is selected
-        updateDeviceInfo('CR', '--.--');
-      }
-    });
-
-    modelCr2Radio.addEventListener('change', () => {
-      if (modelCr2Radio.checked) {
-        deviceModel = 'CR2';
-        // Update display if version is already known
-        const deviceInfoDisplay = document.getElementById('device-info-display');
-        const versionValueElement = deviceInfoDisplay.querySelector('.version-value');
-        if (versionValueElement) {
-          const version = versionValueElement.textContent.trim();
-          if (version && version !== '--.--' && version !== 'Unknown') {
-            updateDeviceInfo('CR2', version);
-          } else {
-            updateDeviceInfo('CR2', '--.--');
-          }
-        } else {
-          updateDeviceInfo('CR2', '--.--');
-        }
-      }
-    });
-
     // Version response check function. Accepts both response formats:
     //   current FW (RESERVED_7(0)) : AF 09 07 00 [sm_maj][sm_min][hmi_maj][hmi_min][mc_maj][mc_min] [cs]  (11 bytes)
     //   legacy  FW (GetFwVersion)     : AF 03 [major] [minor] [cs]                                          (5 bytes)
-    function checkVersionResponse(data) {
-      // Add data to buffer
-      const newBuffer = new Uint8Array(receivedBuffer.length + data.length);
-      newBuffer.set(receivedBuffer);
-      newBuffer.set(data, receivedBuffer.length);
-      receivedBuffer = newBuffer;
+    //   legacy  FW (older format)     : AF 04 00 [major] [minor] [cs]                                       (6 bytes, e.g. AF 04 00 51 06 FC = 81.06)
+    // The response often arrives split across several reads (e.g. "AF 04" + "00 51 06 FC"),
+    // so it is reassembled in its own buffer and cut out by length + checksum. Sharing
+    // receivedBuffer with checkPowerOnResponse duplicated and dropped those fragments.
+    let versionBuffer = new Uint8Array(0);
 
-      if (waitingForVersionResponse && receivedBuffer.length >= 2 && receivedBuffer[0] === 0xAF) {
+    function checkVersionResponse(data) {
+      if (!waitingForVersionResponse) {
+        versionBuffer = new Uint8Array(0);
+        return;
+      }
+      const buf = new Uint8Array(versionBuffer.length + data.length);
+      buf.set(versionBuffer);
+      buf.set(data, versionBuffer.length);
+
+      let i = 0;
+      while (i + 2 <= buf.length) {
+        if (buf[i] !== 0xAF) { i++; continue; }
+        const total = buf[i + 1] + 2;       // 0xAF + length + (payload + checksum)
+        if (buf[i + 1] < 2 || total > 64) { i++; continue; }
+        if (buf.length - i < total) break;  // frame incomplete; wait for the next read
+        let cs = 0;
+        for (let k = 0; k < total - 1; k++) cs ^= buf[i + k];
+        if (cs !== buf[i + total - 1]) { i++; continue; }
+        const f = buf.subarray(i, i + total);
+        i += total;
+
         let majorVersion = null;
         let minorVersion = null;
-        if (receivedBuffer[1] === 0x09 && receivedBuffer[2] === 0x07 && receivedBuffer.length >= 11) {
+        if (f[1] === 0x09 && f[2] === 0x07 && f[3] === 0x00) {
           // RESERVED_7(0): AF 09 [cmd 0x07][type 0x00] sm_maj sm_min hmi_maj hmi_min mc_maj mc_min cs
-          majorVersion = receivedBuffer[4];  // SM major
-          minorVersion = receivedBuffer[5];  // SM minor
-        } else if (receivedBuffer[1] === 0x03 && receivedBuffer.length >= 5) {
+          majorVersion = f[4];  // SM major
+          minorVersion = f[5];  // SM minor
+        } else if (f[1] === 0x03) {
           // legacy GetFwVersion: AF 03 major minor cs
-          majorVersion = receivedBuffer[2];
-          minorVersion = receivedBuffer[3];
+          majorVersion = f[2];
+          minorVersion = f[3];
+        } else if (f[1] === 0x04 && f[2] === 0x00) {
+          // legacy older format: AF 04 00 major minor cs
+          majorVersion = f[3];
+          minorVersion = f[4];
         }
 
         if (majorVersion !== null) {
@@ -2062,18 +2014,10 @@
           const versionString = `${majorVersion}.${minorVersion.toString().padStart(2, '0')}`;
 
           if (isValidVersion(versionString)) {
-            appendLog(`[${timestamp}] Model CR2\n`);
             appendLog(`[${timestamp}] Version: ${versionString}\n`);
 
             // Update device information
-            deviceModel = 'CR2';
-            updateDeviceInfo('CR2', versionString);
-
-            // Update radio button to CR2
-            const modelCr2Radio = document.getElementById('model-cr2-radio');
-            if (modelCr2Radio) {
-              modelCr2Radio.checked = true;
-            }
+            updateDeviceInfo(versionString);
           } else {
             // Not "8x.xx": treat as an invalid value - do not accept or display it.
             appendLog(`[${timestamp}] Version ${versionString} ignored (expected 8x.xx)\n`);
@@ -2085,15 +2029,11 @@
             versionResponseTimeout = null;
           }
           waitingForVersionResponse = false;
-          receivedBuffer = new Uint8Array(0);  // consumed the version frame (5 or 6 bytes)
+          versionBuffer = new Uint8Array(0);
+          return;
         }
       }
-
-      // Clear buffer (bound growth; partial frames are retained until complete)
-      if (receivedBuffer.length >= 6) {
-        receivedBuffer = new Uint8Array(0);
-        // speedProfileBuffer = new Uint8Array(0); // Prevent clearing during speed profile processing
-      }
+      versionBuffer = buf.slice(i);  // keep only the unfinished tail
     }
 
     /* ===== Device Capability panel (API version / available commands / available data) ===== */
@@ -2352,7 +2292,7 @@
         keepReading = true;
 
         // Reset device information
-        updateDeviceInfo('unknown', '--.--');
+        updateDeviceInfo('--.--');
 
         // Disable speed profile input fields
         setSpeedProfileInputsEditable(false);
@@ -2402,7 +2342,7 @@
         testerAddons.onConnectionChange.forEach((handler) => handler(false));
 
         // Reset device information
-        updateDeviceInfo('unknown', '--.--');
+        updateDeviceInfo('--.--');
 
         // Disable speed profile input fields
         setSpeedProfileInputsEditable(false);
@@ -2843,9 +2783,8 @@
           
           await getSpeedProfile(mode);
           
-          // Wait a bit before proceeding to next mode (100ms for CR2 model, 2700ms for others)
-          const waitTime = deviceModel === 'CR2' ? 100 : 2700;
-          await new Promise(resolve => setTimeout(resolve, waitTime));
+          // Wait a bit before proceeding to next mode
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
 
         // Processing after overall completion
@@ -4444,10 +4383,11 @@
       while (i + 3 <= settingsBuffer.length) {
         if (settingsBuffer[i] !== 0xAF) { i++; continue; }
         const len = settingsBuffer[i + 1];
+        const cmd = settingsBuffer[i + 2];
+        // 他のフレーム(配信中の Dataset1 など)の完成は待たない。待つと後続の応答を取りこぼす。
+        if (cmd !== 0x0F || len < 3 || len > 62) { i++; continue; }
         const total = len + 2;                       // sign + len + (payload + cs)
         if (settingsBuffer.length - i < total) break;  // フレーム未達。次チャンクを待つ。
-        const cmd = settingsBuffer[i + 2];
-        if (cmd !== 0x0F || len < 3) { i++; continue; }
 
         let cs = 0;
         for (let k = 0; k < total - 1; k++) cs ^= settingsBuffer[i + k];
@@ -4464,10 +4404,8 @@
         settingsBuffer = new Uint8Array(0);
         return;
       }
-      // 直近の未確定分だけ残す。
-      if (settingsBuffer.length > 16) {
-        settingsBuffer = settingsBuffer.slice(settingsBuffer.length - 16);
-      }
+      // 未完成の応答フレーム(またはその手前の数バイト)だけ残す。
+      settingsBuffer = settingsBuffer.slice(i);
     }
 
     // SET_MAX_SPEED_LEVELCommandSend

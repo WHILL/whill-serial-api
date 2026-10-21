@@ -441,22 +441,44 @@ async function inspGetCapability(retries = 3) {
   return null;
 }
 
+// Legacy Service Module FW answers with the SM version only, in one of two forms:
+//   AF 04 00 [major] [minor] [cs]  (payload 00 maj min, e.g. AF 04 00 51 06 FC = 81.06)
+//   AF 03 [major] [minor] [cs]     (payload maj min)
+// Dataset0 also starts with 0x00 but is far longer, so the payload length tells them apart.
+function inspLegacyVersion(f) {
+  const v = f.payload;
+  if (v.length === 3 && v[0] === 0x00) return [v[1], v[2]];
+  if (v.length === 2 && v[0] >= 80 && v[0] <= 89) return [v[0], v[1]];
+  return null;
+}
+
 // GetIdentification (0x07). HMI / MC read 0.0 until they answer on the internal bus, so retry.
+// Legacy FW returns the SM version only (HMI / MC stay unknown); if nothing answers at all,
+// fall back once to the legacy GetFwVersion request (AF 02 07 AA).
 async function inspGetIdentification(retries = 4) {
   let last = null;
   for (let i = 0; i < retries; i++) {
     inspCheckAbort();
-    const waiter = inspWaitFrame((f) => f.cmd === 0x07 && f.payload[1] === 0x00 && f.payload.length >= 8, 700);
+    const waiter = inspWaitFrame((f) =>
+      (f.cmd === 0x07 && f.payload[1] === 0x00 && f.payload.length >= 8) || inspLegacyVersion(f), 700);
     await inspSend(inspBuildFrame([0x07, 0x00]), i === 0 ? 'GetIdentification' : `GetIdentification (retry ${i})`);
     const f = await waiter;
     if (f) {
+      const legacy = inspLegacyVersion(f);
+      if (legacy) return { sm: legacy, hmi: null, mc: null };
       const v = f.payload;
       last = { sm: [v[2], v[3]], hmi: [v[4], v[5]], mc: [v[6], v[7]] };
       if (last.hmi[0] !== 0 && last.mc[0] !== 0) return last;
     }
     await inspSleep(300);
   }
-  return last;
+  if (last) return last;
+
+  inspCheckAbort();
+  const waiter = inspWaitFrame(inspLegacyVersion, 700);
+  await inspSend(inspBuildFrame([0x07]), 'GetFwVersion (legacy)');
+  const f = await waiter;
+  return f ? { sm: inspLegacyVersion(f), hmi: null, mc: null } : null;
 }
 
 // GetIdentification D0=1..3 returns the serial number of the Service Module, the

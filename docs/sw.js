@@ -26,7 +26,7 @@
  * Bump CACHE whenever a tool is released, so the previous payload is dropped in
  * `activate` instead of lingering.
  */
-const CACHE = 'whill-mrp-tester-v1.00';
+const CACHE = 'whill-mrp-tester-v1.01';
 
 /*
  * Precached on install. The testers are listed as directory URLs, not as
@@ -77,8 +77,11 @@ self.addEventListener('fetch', (event) => {
   // Anything outside the app falls through to the browser untouched.
   if (!MANAGED.has(url.pathname)) return;
 
+  // `no-cache` makes the browser revalidate with the server instead of answering
+  // from its HTTP cache: GitHub Pages sends max-age=600, so a plain fetch could
+  // hand back a tester up to ten minutes older than the one just published.
   event.respondWith(
-    fetch(request)
+    fetch(request.url, { cache: 'no-cache' })
       .then((response) => {
         if (response && response.ok && response.type === 'basic') {
           const copy = response.clone();
