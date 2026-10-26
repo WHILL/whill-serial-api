@@ -29,6 +29,8 @@ const HOOK = `
   cautionsHtml: () => inspWarnBox.innerHTML,
   // constants under test
   spParams: INSP_SP_PARAMS, spBaseline: INSP_SP_BASELINE, motorProfile: INSP_MOTOR_PROFILE,
+  plannedRows: INSP_PLANNED_ROWS,
+  summaryHtml: () => inspSummaryBox.innerHTML,
   // state access for the tests
   setPort: (p) => { port = p; },
   setConnected: (v) => { isConnected = v; },

@@ -73,6 +73,10 @@ const INSP_STYLE = `
 #inspection-tab .insp-verdict.ok { background: #2e7d32; }
 #inspection-tab .insp-verdict.ng { background: #E94816; }
 #inspection-tab .insp-verdict.none { background: #999; }
+#inspection-tab .insp-progress {
+  flex: 0 1 220px; height: 10px; background: #EFEFEF; border-radius: 5px; overflow: hidden;
+}
+#inspection-tab .insp-progress > div { height: 100%; background: #0075B8; }
 #inspection-tab .insp-table { border-collapse: collapse; width: 100%; font-size: 9.5pt; color: #000; }
 #inspection-tab .insp-table th, #inspection-tab .insp-table td {
   border: 1px solid #cfe0ee; padding: 3px 6px; text-align: left; vertical-align: top;
@@ -201,6 +205,12 @@ let inspMode = 'light';
 let inspLight = true;        // true for light and legacy: the abbreviated case set
 let inspLegacy = false;      // true when only the six legacy commands may be sent
 
+// Report rows a normal run produces per mode, shown as the denominator of the
+// progress counter. A few setup rows depend on the chair's state (e.g. whether it
+// starts powered on), so a real run can end one or two short of this - the counter
+// just stops there. The dry run checks these against the simulated sequence.
+const INSP_PLANNED_ROWS = { full: 128, light: 39, legacy: 21 };
+
 // true while the automatic check is running. The tester's raw receive log is
 // suppressed while it is set, because this add-on writes its own log lines.
 let inspRunning = false;
@@ -326,6 +336,7 @@ function inspAddResult(row) {
   const rec = { no: ++inspRowNo, ...row };
   inspResults.push(rec);
   inspRenderResults();
+  inspRenderSummary(false);
   appendLog(`[${getJapanTimeString()}] [inspection] #${rec.no} ${rec.cmd} / ${rec.item}` +
             ` -> ${rec.result}${rec.actual ? ` (${rec.actual})` : ''}\n`);
   return rec;
@@ -352,15 +363,24 @@ function inspRenderSummary(finished) {
   const rows = inspResults.filter((r) => !r.stage);
   const count = (v) => rows.filter((r) => r.result === v).length;
   const pass = count('PASS'), fail = count('FAIL'), info = count('INFO'), skip = count('SKIP');
-  let verdict = 'In progress', cls = 'none';
+  const done = rows.length;
+  let verdict = 'Not run', cls = 'none', progress;
   if (finished) {
-    if (pass + fail === 0) { verdict = 'Not run'; cls = 'none'; }
-    else if (fail === 0) { verdict = 'PASS'; cls = 'ok'; }
-    else { verdict = 'FAIL'; cls = 'ng'; }
+    if (pass + fail > 0) { verdict = fail === 0 ? 'PASS' : 'FAIL'; cls = fail === 0 ? 'ok' : 'ng'; }
+    progress = `<span>${done} items</span>`;
+  } else if (inspRunning) {
+    // The planned count can be short by a row or two on a real chair; never show done > total.
+    const total = Math.max(INSP_PLANNED_ROWS[inspMode] || 0, done);
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    verdict = 'In progress';
+    progress = `<span>Progress ${done} / ${total}</span>` +
+               `<span class="insp-progress"><div style="width:${pct}%;"></div></span>`;
+  } else {
+    progress = `<span>${done} items</span>`;
   }
   inspSummaryBox.innerHTML =
     `<span class="insp-verdict ${cls}">Overall: ${inspEsc(verdict)}</span>` +
-    `<span>${pass + fail} judged</span>` +
+    progress +
     `<span style="color:#2e7d32;">PASS ${pass}</span>` +
     `<span style="color:#E94816;">FAIL ${fail}</span>` +
     `<span style="color:#0075B8;">Info ${info}</span>` +
@@ -934,9 +954,13 @@ async function inspStageHorn() {
 
   await inspCommand([0x0D, 0x01], 'SoundHorn D0=1');
   await inspSleep(1200);
+  // These dialogs are answered by whoever runs the inspection, not only by the
+  // designers, so they ask a plain question and leave out the command details.
+  // In both, OK is the expected (passing) answer.
   const rang = window.confirm(
-    'SoundHorn (D0=1) has been sent.\n\nDid the horn sound?\n\n' +
-    '[OK] = it sounded (PASS)   [Cancel] = it stayed silent (FAIL)');
+    'Did the horn just sound?\n\n' +
+    'OK = Yes, it sounded\n' +
+    'Cancel = No, it did not sound');
   inspAddResult({
     cmd: 'SoundHorn (0x0D)', item: 'The horn sounds (confirmed by ear)',
     sent: 'D0=1', expect: 'the horn sounds', actual: rang ? 'sounded' : 'stayed silent',
@@ -949,9 +973,12 @@ async function inspStageHorn() {
     await inspCommand([0x0D, v], `SoundHorn D0=${v}`);
     await inspSleep(1200);
   }
+  // The window starts when the first dialog was closed, so the beep answered
+  // there is clearly not part of this question.
   const silent = window.confirm(
-    'SoundHorn has been sent with D0=0 / 2 / 255.\n\nDid the horn stay silent every time?\n\n' +
-    '[OK] = it stayed silent (PASS)   [Cancel] = it sounded (FAIL)');
+    'Since you closed the previous message, has the horn stayed silent?\n\n' +
+    'OK = Yes, it stayed silent\n' +
+    'Cancel = No, it sounded at least once');
   inspAddResult({
     cmd: 'SoundHorn (0x0D)', item: 'Values other than 1 do not sound the horn (confirmed by ear)',
     sent: 'D0=0 / 2 / 255', expect: 'the horn stays silent for all of them',
@@ -1884,9 +1911,12 @@ function inspShowCompletionPopup(finalStatus, elapsedText) {
   const fails = rows.filter((r) => r.result === 'FAIL');
   const verdict = count('PASS') + fails.length === 0 ? 'Not run'
                 : fails.length === 0 ? 'PASS' : 'FAIL';
-  let message = `${finalStatus}\n\n` +
+  // The verdict goes first and in capitals: alert() cannot style text, so this is
+  // what makes PASS and FAIL tell apart at a glance.
+  const mark = verdict === 'PASS' ? '✅' : verdict === 'FAIL' ? '❌' : '⚠️';
+  let message = `${mark} OVERALL: ${verdict.toUpperCase()}\n\n` +
+                `${finalStatus}\n` +
                 `Inspection type: ${inspMode.charAt(0).toUpperCase() + inspMode.slice(1)}\n` +
-                `Overall: ${verdict}\n` +
                 `PASS ${count('PASS')} / FAIL ${fails.length} / ` +
                 `Info ${count('INFO')} / Skipped ${count('SKIP')}\n` +
                 `Duration: ${elapsedText}`;

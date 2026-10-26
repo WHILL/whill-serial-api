@@ -25,9 +25,6 @@ const SHRINK = {
   INSP_PROFILE_SETTLE_MS: 60,
 };
 
-// Expected number of report rows, so a silently shortened sequence is caught.
-const EXPECTED_ROWS = { full: 128, light: 39, legacy: 21 };
-
 const mode = process.argv.includes('--full') ? 'full'
            : process.argv.includes('--legacy') ? 'legacy' : 'light';
 const popups = [];
@@ -42,6 +39,17 @@ T.setPort(port);
 T.setConnected(true);
 ctx.document.getElementById('insp-jackup-check').checked = true;   // the operator's confirmation
 ctx.document.selectedMode = mode;                                  // the Full / Light radio
+
+// Expected number of report rows, so a silently shortened sequence is caught. The
+// add-on shows the same number as the progress denominator, so they must agree.
+const EXPECTED_ROWS = T.plannedRows;
+
+// Sample the Result summary while the run is going, to confirm the counter moves.
+const progressSeen = new Set();
+const sampler = setInterval(() => {
+  const m = /Progress (\d+) \/ (\d+)/.exec(T.summaryHtml());
+  if (m) progressSeen.add(`${m[1]}/${m[2]}`);
+}, 50);
 
 const startedAt = Date.now();
 
@@ -99,7 +107,16 @@ T.run().then(() => new Promise((r) => setTimeout(r, 200))).then(() => {
       : '  none were sent');
   }
 
+  clearInterval(sampler);
+  const progressMoved = progressSeen.size >= 3 &&
+    [...progressSeen].every((p) => p.endsWith(`/${EXPECTED_ROWS[mode]}`));
+  console.log(`\n===== Progress counter =====\n  ${progressSeen.size} distinct values seen` +
+              (progressMoved ? '' : ` - NOT OK: ${[...progressSeen].join(', ')}`));
+  const popupOk = !!last && /^\S+ OVERALL: (PASS|FAIL)\n/.test(last);
+  if (!popupOk) console.log('\nThe pop-up does not start with the OVERALL verdict');
+
   const ok = realFailures.length === 0 && rows.length === EXPECTED_ROWS[mode] && !!last &&
+             progressMoved && popupOk &&
              (mode !== 'legacy' || sim.unsupported.length === 0);
   if (rows.length !== EXPECTED_ROWS[mode]) {
     console.log(`\nExpected ${EXPECTED_ROWS[mode]} rows, got ${rows.length}`);
