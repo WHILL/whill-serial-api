@@ -811,7 +811,29 @@
     #custom-command-tab .cmd-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
     #custom-command-tab .cmd-hex { font-family: monospace; font-size: 8.5pt; color: #000; background: #f1f5f9; border: 1px solid #dee2e6; border-radius: 4px; padding: 3px 6px; flex: 1; min-width: 130px; overflow-x: auto; white-space: nowrap; }
 
+    /* ===== GNSS status badge / map ===== */
+    .gnss-badge { padding: 0 6px; border-radius: 4px; color: #000; }
+    .gnss-badge.gnss-unavailable { background: #e0e0e0; color: #555; }
+    .gnss-badge.gnss-searching   { background: #fff3cd; color: #856404; }
+    .gnss-badge.gnss-fix         { background: #d4edda; color: #1e7e34; }
+    .gnss-badge.gnss-fix-aug     { background: #cce5ff; color: #004085; }
+    .gnss-map-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 9pt; flex-wrap: wrap; }
+    .gnss-map-controls label { font-weight: bold; color: #0075B8; }
+    .gnss-map-controls .clear-button { margin: 0; padding: 3px 10px; font-size: 9pt; }
+    .gnss-map-controls a { color: #0075B8; font-weight: bold; }
+    .gnss-map-last-fix { margin-left: auto; color: #555; font-size: 8.5pt; }
+    .gnss-map { position: relative; height: 320px; border: 1px solid #0075B8; border-radius: 4px; background: #f1f5f9; overflow: hidden; }
+    .gnss-map-message {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 85%;
+      background: rgba(255, 255, 255, 0.92); border: 1px solid #ccc; border-radius: 6px;
+      color: #555; font-size: 9.5pt; text-align: center; padding: 6px 12px; z-index: 1000; pointer-events: none;
+    }
+    .gnss-map-message:empty { display: none; }
+
   </style>
+  <!-- Leaflet (map library) for the GNSS map. If it cannot be loaded (offline), only the map is unavailable. -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
 </head>
 
 <body>
@@ -940,6 +962,31 @@
                   <span id="main-joystick-pause" class="motor-status-value" style="color: #000; font-weight: bold; font-size: 9pt;">-</span>
                 </div>
               </div>
+
+              <!-- GNSS Information (Dataset1 offset 29-39, Serial API 1.2+) -->
+              <div class="motor-status-card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #0075B8; border-radius: 8px; padding: 8px; flex: 0 0 180px;">
+                <div class="motor-status-header" style="font-weight: bold; color: #0075B8; margin-bottom: 6px; text-align: center; font-size: 11pt;">🛰️ GNSS</div>
+                <div class="motor-status-item" style="margin-bottom: 3px; display: flex; justify-content: space-between;">
+                  <span class="motor-status-label" style="font-weight: bold; color: #0075B8; font-size: 9pt;">Status:</span>
+                  <span id="main-gnss-status" class="motor-status-value gnss-badge" style="font-weight: bold; font-size: 9pt;">-</span>
+                </div>
+                <div class="motor-status-item" style="margin-bottom: 3px; display: flex; justify-content: space-between;">
+                  <span class="motor-status-label" style="font-weight: bold; color: #0075B8; font-size: 9pt;">Satellites:</span>
+                  <span id="main-gnss-satellites" class="motor-status-value" style="color: #000; font-weight: bold; font-size: 9pt;">-</span>
+                </div>
+                <div class="motor-status-item" style="margin-bottom: 3px; display: flex; justify-content: space-between;">
+                  <span class="motor-status-label" style="font-weight: bold; color: #0075B8; font-size: 9pt;">HDOP:</span>
+                  <span id="main-gnss-hdop" class="motor-status-value" style="color: #000; font-weight: bold; font-size: 9pt;">-</span>
+                </div>
+                <div class="motor-status-item" style="margin-bottom: 3px; display: flex; justify-content: space-between;">
+                  <span class="motor-status-label" style="font-weight: bold; color: #0075B8; font-size: 9pt;">Latitude:</span>
+                  <span id="main-gnss-latitude" class="motor-status-value" style="color: #000; font-weight: bold; font-size: 9pt;">-</span>
+                </div>
+                <div class="motor-status-item" style="display: flex; justify-content: space-between;">
+                  <span class="motor-status-label" style="font-weight: bold; color: #0075B8; font-size: 9pt;">Longitude:</span>
+                  <span id="main-gnss-longitude" class="motor-status-value" style="color: #000; font-weight: bold; font-size: 9pt;">-</span>
+                </div>
+              </div>
             </div>
       </div>
     </div>
@@ -998,14 +1045,30 @@
           <span id="cap-api-version" style="font-family: monospace; font-weight: bold; color: #000; font-size: 13pt;">--.--</span>
           <span id="cap-api-note" style="color: #666; font-size: 9pt;">(fixed per Service Module Serial API version)</span>
         </div>
-        <div style="display: flex; gap: 8px; align-items: stretch;">
-          <div class="motor-status-card" style="background: linear-gradient(135deg, #e6f6f5 0%, #cfeeec 100%); border: 2px solid #4DBCB6; border-radius: 8px; padding: 8px; flex: 1;">
+        <div style="display: flex; gap: 8px; align-items: flex-start;">
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;">
+          <div class="motor-status-card" style="background: linear-gradient(135deg, #e6f6f5 0%, #cfeeec 100%); border: 2px solid #4DBCB6; border-radius: 8px; padding: 8px;">
             <div class="motor-status-header" style="font-weight: bold; color: #2e7d32; margin-bottom: 6px; text-align: center; font-size: 11pt;">✅ Available Commands</div>
             <div id="cap-command-list" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(7, auto); grid-auto-flow: column; gap: 2px 10px; font-size: 8pt; white-space: nowrap; color: #000;">-</div>
           </div>
+
+          <!-- GNSS Map (GSI tiles via Leaflet). Needs internet access for Leaflet and the tiles. -->
+          <div class="motor-status-card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #0075B8; border-radius: 8px; padding: 8px;">
+            <div class="motor-status-header" style="font-weight: bold; color: #0075B8; margin-bottom: 6px; text-align: center; font-size: 11pt;">🗺️ GNSS Map</div>
+            <div class="gnss-map-controls">
+              <label><input type="checkbox" id="gnss-map-follow" checked> Follow</label>
+              <button id="gnss-map-clear-track" type="button" class="clear-button">Clear Track</button>
+              <a id="gnss-map-gsi-link" href="#" target="_blank" rel="noopener" style="display: none;">Open in 地理院地図</a>
+              <span id="gnss-map-last-fix" class="gnss-map-last-fix">No fix yet</span>
+            </div>
+            <div id="gnss-map" class="gnss-map">
+              <div id="gnss-map-message" class="gnss-map-message">Loading map…</div>
+            </div>
+          </div>
+          </div>
           <div class="motor-status-card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #0075B8; border-radius: 8px; padding: 8px; flex: 1;">
             <div class="motor-status-header" style="font-weight: bold; color: #0075B8; margin-bottom: 6px; text-align: center; font-size: 11pt;">📊 Available Data (Dataset1)</div>
-            <div id="cap-data-list" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(9, auto); grid-auto-flow: column; gap: 2px 10px; font-size: 8pt; white-space: nowrap; color: #000;">-</div>
+            <div id="cap-data-list" style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(12, auto); grid-auto-flow: column; gap: 2px 10px; font-size: 8pt; white-space: nowrap; color: #000;">-</div>
           </div>
         </div>
       </div>
@@ -1660,10 +1723,219 @@
       document.getElementById('main-error-code').style.color = '#000';
       document.getElementById('main-error-code').style.fontWeight = 'normal';
       document.getElementById('main-battery-level').style.color = '#000';
+
+      clearGnssDisplay();
     }
+
+    // ===== GNSS (Dataset1 offset 29-39, Serial API 1.2+) =====
+    // gnss_status: 0 unavailable (receiver off / no comms), 1 searching (no fix),
+    //              2 fix (GGA quality 1), 3 augmented fix (GGA quality 2 = SBAS/QZSS), 4-255 reserved.
+    // While not fixed, latitude / longitude / satellites / HDOP are zero-filled by the firmware.
+    const GNSS_STATUS = {
+      0: { text: 'Unavailable', cls: 'gnss-unavailable' },
+      1: { text: 'Searching', cls: 'gnss-searching' },
+      2: { text: 'Fix', cls: 'gnss-fix' },
+      3: { text: 'Fix (SBAS/QZSS)', cls: 'gnss-fix-aug' },
+    };
+    const GNSS_VALUE_IDS = ['main-gnss-satellites', 'main-gnss-hdop', 'main-gnss-latitude', 'main-gnss-longitude'];
+
+    function gnssHasFix(gnss) {
+      return gnss.status === 2 || gnss.status === 3;
+    }
+
+    // HDOP grade (HDOP on the wire is x10, 255 = 25.5 or more).
+    function gnssHdopText(hdopX10) {
+      if (hdopX10 === 255) return '≥25.5 (Poor)';
+      const hdop = hdopX10 / 10;
+      let grade = 'Poor';
+      if (hdop <= 1) grade = 'Excellent';
+      else if (hdop <= 2) grade = 'Good';
+      else if (hdop <= 5) grade = 'Moderate';
+      else if (hdop <= 10) grade = 'Fair';
+      return `${hdop.toFixed(1)} (${grade})`;
+    }
+
+    function setGnssStatusBadge(text, cls) {
+      const el = document.getElementById('main-gnss-status');
+      el.textContent = text;
+      el.className = 'motor-status-value gnss-badge' + (cls ? ` ${cls}` : '');
+    }
+
+    function clearGnssDisplay() {
+      setGnssStatusBadge('-', '');
+      GNSS_VALUE_IDS.forEach(id => { document.getElementById(id).textContent = '-'; });
+    }
+
+    // gnss is null when the firmware sends the Serial API 1.1 Dataset1 (no GNSS fields).
+    function updateGnssDisplay(gnss) {
+      if (!gnss) {
+        setGnssStatusBadge('N/A (API < 1.2)', 'gnss-unavailable');
+        GNSS_VALUE_IDS.forEach(id => { document.getElementById(id).textContent = '-'; });
+        gnssMap.update(null);
+        return;
+      }
+      const s = GNSS_STATUS[gnss.status] || { text: `Reserved (${gnss.status})`, cls: 'gnss-unavailable' };
+      setGnssStatusBadge(s.text, s.cls);
+      const fix = gnssHasFix(gnss);
+      document.getElementById('main-gnss-satellites').textContent = fix ? gnss.satellites : '-';
+      document.getElementById('main-gnss-hdop').textContent = fix ? gnssHdopText(gnss.hdop) : '-';
+      document.getElementById('main-gnss-latitude').textContent = fix ? gnss.latitude.toFixed(7) : '-';
+      document.getElementById('main-gnss-longitude').textContent = fix ? gnss.longitude.toFixed(7) : '-';
+      gnssMap.update(gnss);
+    }
+
+    // GNSS map: GSI (Geospatial Information Authority of Japan) tiles via Leaflet. Dataset1 can arrive every 20 ms while GNSS
+    // only updates once a second, so the map is redrawn at most once per GNSS_MAP_UPDATE_MS.
+    const gnssMap = (() => {
+      const GNSS_MAP_UPDATE_MS = 1000;
+      const TRACK_MAX_POINTS = 3600;        // 1 hour at 1 Hz
+      const FIRST_FIX_ZOOM = 18;
+      const MARKER_COLOR = { 2: '#28a745', 3: '#0075B8' };
+      const MARKER_COLOR_STALE = '#9aa0a6';
+      const MSG_WAITING = 'Waiting for GNSS fix…';
+      const MSG_TILE_ERROR = 'Map tiles could not be loaded (offline?)';
+      const MAP_LAYER_STORAGE_KEY = 'whill-cr2-tester.gnssMapLayer';
+
+      let map = null;
+      let marker = null;
+      let track = null;
+      let hasCentered = false;
+      let lastFixTime = null;
+      let pending = undefined;
+      let lastDrawn = 0;
+      let drawTimer = null;
+
+      const msgEl = document.getElementById('gnss-map-message');
+      const followEl = document.getElementById('gnss-map-follow');
+      const lastFixEl = document.getElementById('gnss-map-last-fix');
+      const gsiLinkEl = document.getElementById('gnss-map-gsi-link');
+
+      function setMessage(text) {
+        msgEl.textContent = text;
+      }
+
+      function timeText() {
+        const t = japanTimeParts();
+        return `${t.hours}:${t.minutes}:${t.seconds}`;
+      }
+
+      function init() {
+        if (typeof L === 'undefined') {
+          setMessage('Map unavailable: Leaflet could not be loaded (offline?). The position is still shown in the GNSS panel.');
+          return;
+        }
+        // Japan overview until the first fix.
+        map = L.map('gnss-map').setView([36.0, 138.0], 5);
+        // GSI tiles: free, no API key, attribution "国土地理院" required. OpenStreetMap tiles are
+        // not used because tile.openstreetmap.org answered "403 Access blocked" in some browser
+        // environments. The chosen layer is remembered per browser.
+        const gsiAttribution = '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a>';
+        const baseLayers = {
+          '地理院 標準地図': L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
+            maxZoom: 19, maxNativeZoom: 18, attribution: gsiAttribution,
+          }),
+          '地理院 淡色地図': L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
+            maxZoom: 19, maxNativeZoom: 18, attribution: gsiAttribution,
+          }),
+        };
+        let layerName = '地理院 標準地図';
+        try {
+          const saved = localStorage.getItem(MAP_LAYER_STORAGE_KEY);
+          if (saved && baseLayers[saved]) layerName = saved;
+        } catch (e) { /* storage unavailable: use the default layer */ }
+        baseLayers[layerName].addTo(map);
+        L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
+        map.on('baselayerchange', (e) => {
+          try { localStorage.setItem(MAP_LAYER_STORAGE_KEY, e.name); } catch (err) { /* ignore */ }
+        });
+        let tileLoaded = false;
+        Object.values(baseLayers).forEach((tiles) => {
+          tiles.on('tileload', () => {
+            tileLoaded = true;
+            if (msgEl.textContent === MSG_TILE_ERROR) setMessage(lastFixTime ? '' : MSG_WAITING);
+          });
+          tiles.on('tileerror', () => { if (!tileLoaded) setMessage(MSG_TILE_ERROR); });
+        });
+        track = L.polyline([], { color: '#0075B8', weight: 3, opacity: 0.7 }).addTo(map);
+        marker = L.circleMarker([0, 0], { radius: 7, weight: 2, color: '#fff', fillOpacity: 1 });
+        // Dragging the map by hand stops following the current position.
+        map.on('dragstart', () => { followEl.checked = false; });
+        // The map container is hidden until connected; re-measure whenever it becomes visible.
+        new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById('gnss-map'));
+        setMessage(MSG_WAITING);
+      }
+
+      function draw(gnss) {
+        lastDrawn = Date.now();
+        if (!map) return;
+        if (gnss === null) {
+          if (!lastFixTime) setMessage('GNSS is not supported by this firmware (Serial API < 1.2)');
+          return;
+        }
+        if (!gnssHasFix(gnss)) {
+          if (lastFixTime) {
+            marker.setStyle({ fillColor: MARKER_COLOR_STALE });
+            lastFixEl.textContent = `Last fix ${lastFixTime}`;
+          }
+          return;
+        }
+        const latlng = L.latLng(gnss.latitude, gnss.longitude);
+        const points = track.getLatLngs();
+        const last = points[points.length - 1];
+        if (!last || !last.equals(latlng)) {
+          points.push(latlng);
+          if (points.length > TRACK_MAX_POINTS) points.splice(0, points.length - TRACK_MAX_POINTS);
+          track.setLatLngs(points);
+        }
+        marker.setLatLng(latlng).setStyle({ fillColor: MARKER_COLOR[gnss.status] });
+        if (!map.hasLayer(marker)) marker.addTo(map);
+        if (!hasCentered) {
+          map.setView(latlng, FIRST_FIX_ZOOM);
+          hasCentered = true;
+        } else if (followEl.checked) {
+          map.panTo(latlng);
+        }
+        lastFixTime = timeText();
+        lastFixEl.textContent = `Fix ${lastFixTime}`;
+        const lat = gnss.latitude.toFixed(7);
+        const lon = gnss.longitude.toFixed(7);
+        gsiLinkEl.href = `https://maps.gsi.go.jp/#${FIRST_FIX_ZOOM}/${lat}/${lon}/`;
+        gsiLinkEl.style.display = '';
+        if (msgEl.textContent !== MSG_TILE_ERROR) setMessage('');
+      }
+
+      function update(gnss) {
+        pending = gnss;
+        if (drawTimer) return;
+        const wait = Math.max(0, GNSS_MAP_UPDATE_MS - (Date.now() - lastDrawn));
+        drawTimer = setTimeout(() => {
+          drawTimer = null;
+          draw(pending);
+        }, wait);
+      }
+
+      function clearTrack() {
+        if (track) track.setLatLngs([]);
+      }
+
+      document.getElementById('gnss-map-clear-track').addEventListener('click', clearTrack);
+      followEl.addEventListener('change', () => {
+        if (followEl.checked && map && map.hasLayer(marker)) map.panTo(marker.getLatLng());
+      });
+      // Leaflet is loaded with "defer", so it is available only from DOMContentLoaded.
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+
+      return { update };
+    })();
 
     // Function to update motor status display for basic function tab
     function updateMainMotorStatusDisplay(status) {
+      updateGnssDisplay(status.gnss);
+
       // Battery information
       document.getElementById('main-battery-level').textContent = `${status.batteryLevel}%`;
       document.getElementById('main-battery-current').textContent = `${(status.batteryCurrent * 2).toFixed(1)}mA`;
@@ -2076,6 +2348,11 @@
       { offset: 26, name: 'Speed Level (Effective)' },
       { offset: 27, name: 'Error' },
       { offset: 28, name: 'Angle Counter' },
+      { offset: 29, name: 'GNSS Latitude' },
+      { offset: 33, name: 'GNSS Longitude' },
+      { offset: 37, name: 'GNSS Status' },
+      { offset: 38, name: 'GNSS Satellites' },
+      { offset: 39, name: 'GNSS HDOP' },
     ];
 
     let capCommandMap = null;
@@ -2190,16 +2467,18 @@
         for (let k = i; k < i + total - 1; k++) checksum ^= capabilityBuffer[k];
         if (checksum !== capabilityBuffer[i + total - 1]) { i++; continue; } // bad frame, resync
 
-        // Command map length: 8 bytes (len 0x10). len 0x0C is the 4-byte command map of older
-        // Service Module firmware and is still accepted. The data map is 4 bytes in both cases.
-        const cmdMapLen = (len === 0x10) ? 8 : ((len === 0x0C) ? 4 : 0);
+        // Command map length: 8 bytes (len 0x10 / 0x11). len 0x0C is the 4-byte command map of older
+        // Service Module firmware and is still accepted. The data map is 4 bytes (offset 0-31), or
+        // 5 bytes (offset 0-39, len 0x11) from Serial API 1.2 where GNSS was added to Dataset1.
+        const cmdMapLen  = (len === 0x10 || len === 0x11) ? 8 : ((len === 0x0C) ? 4 : 0);
+        const dataMapLen = (len === 0x11) ? 5 : 4;
         if (cmdMapLen > 0 && capabilityBuffer[i + 2] === 0x10 && capabilityExpecting) {
-          // Combined capability response: AF 10 [cmd 0x10] [api_major] [api_minor] [cmd_map 0..7] [data_map 0..3] [cs]
+          // Combined capability response: AF [len] [cmd 0x10] [api_major] [api_minor] [cmd_map] [data_map] [cs]
           capabilityReceived = true;
           const apiMajor = capabilityBuffer[i + 3];
           const apiMinor = capabilityBuffer[i + 4];
           capCommandMap  = capabilityBuffer.slice(i + 5, i + 5 + cmdMapLen);
-          capDataMap     = capabilityBuffer.slice(i + 5 + cmdMapLen, i + 9 + cmdMapLen);
+          capDataMap     = capabilityBuffer.slice(i + 5 + cmdMapLen, i + 5 + cmdMapLen + dataMapLen);
           const apiEl = document.getElementById('cap-api-version');
           if (apiEl) apiEl.textContent = `${apiMajor}.${apiMinor.toString().padStart(2, '0')}`;
           const noteEl = document.getElementById('cap-api-note');
@@ -2944,15 +3223,18 @@
       // Search for header and process complete message
       let processedBytes = 0;
       while (motorStatusBuffer.length - processedBytes >= 3) {
-        // Check header (0xAF, 0x1F, 0x01) - Dataset number 1
-        if (motorStatusBuffer[processedBytes] === 0xAF && 
-            motorStatusBuffer[processedBytes + 1] === 0x1F && 
+        // Check header (0xAF, length, 0x01) - Dataset number 1
+        //   length 0x1F: Serial API 1.1 and earlier (29 data bytes, offset 0-28)
+        //   length 0x2A: Serial API 1.2 and later   (40 data bytes, GNSS at offset 29-39)
+        const ds1Length = motorStatusBuffer[processedBytes + 1];
+        if (motorStatusBuffer[processedBytes] === 0xAF &&
+            (ds1Length === 0x1F || ds1Length === 0x2A) &&
             motorStatusBuffer[processedBytes + 2] === 0x01) {
-          
+
           if (!testerAddons.suppressRawLog()) console.log('Motor status header detected:', processedBytes);
-          
-          // Confirm data length (from received log, 29 bytes of data after header)
-          const expectedLength = 32; // Header 3 bytes + data 29 bytes
+
+          // Header 3 bytes + data bytes (the checksum is left behind and skipped as a non-header byte)
+          const expectedLength = ds1Length + 1;
           if (motorStatusBuffer.length - processedBytes >= expectedLength) {
             // Parse motor status information (skip header 3 bytes)
             const dataStart = processedBytes + 3;
@@ -2982,13 +3264,29 @@
             const speedMode = motorStatusBuffer[dataStart + 26];        // Speed mode number (30th byte: 0x00)
             const errorCode = motorStatusBuffer[dataStart + 27];        // Error code (31st byte: 0x59)
             const angleCounter = motorStatusBuffer[dataStart + 28];     // Angle detection counter (32nd byte: 0xAC)
+            // GNSS (offset 29-39, Serial API 1.2+). null on older firmware.
+            // Latitude / longitude: int32, 1e-7 deg, MSB first. Zero-filled while not fixed.
+            let gnss = null;
+            if (ds1Length === 0x2A) {
+              const readInt32 = (o) => (motorStatusBuffer[dataStart + o] << 24) |
+                                       (motorStatusBuffer[dataStart + o + 1] << 16) |
+                                       (motorStatusBuffer[dataStart + o + 2] << 8) |
+                                        motorStatusBuffer[dataStart + o + 3];
+              gnss = {
+                latitude: readInt32(29) / 1e7,
+                longitude: readInt32(33) / 1e7,
+                status: motorStatusBuffer[dataStart + 37],
+                satellites: motorStatusBuffer[dataStart + 38],
+                hdop: motorStatusBuffer[dataStart + 39],
+              };
+            }
 
             // Debug: Output received data to console
             if (!testerAddons.suppressRawLog()) console.log('Motor status data received:', {
               battery, buzzer, deviceLock, joystickPause, maxSpeedLevel, speedLevel, autoPowerOff,
               tripDistance, joystickForward, joystickTurn, batteryLevel,
               batteryCurrent, motorAngleRight, motorAngleLeft, motorSpeedRight, motorSpeedLeft,
-              power, speedMode, errorCode, angleCounter
+              power, speedMode, errorCode, angleCounter, gnss
             });
 
             // Update UI
@@ -2996,14 +3294,14 @@
               battery, buzzer, deviceLock, joystickPause, maxSpeedLevel, speedLevel, autoPowerOff,
               tripDistance, joystickForward, joystickTurn, batteryLevel,
               batteryCurrent, motorAngleRight, motorAngleLeft, motorSpeedRight, motorSpeedLeft,
-              power, speedMode, errorCode, angleCounter
+              power, speedMode, errorCode, angleCounter, gnss
             });
 
             const completeTimestamp = getJapanTimeString();
             const message = `[${completeTimestamp}] Motor Status Received Complete\n`;
             if (!testerAddons.suppressRawLog()) appendLog(message);
 
-            // Remove processed 32 bytes
+            // Remove the processed frame (header + data)
             processedBytes += expectedLength;
           } else {
             // If data is incomplete, wait for next data
